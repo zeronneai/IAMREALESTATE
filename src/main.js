@@ -1,6 +1,7 @@
 import './style.css'
 import { applyLang, initialLang, t, onLang, getLang } from './i18n.js'
-import { initListings } from './listings.js'
+import { initListings, LISTINGS } from './listings.js'
+import { STYLES } from './houses.js'
 import { initCashOffer } from './cashoffer.js'
 import { initInvest } from './invest.js'
 import { initChat } from './chat.js'
@@ -55,7 +56,7 @@ function setPath(p) {
 }
 document.querySelectorAll('[data-path]').forEach(b => b.addEventListener('click', () => setPath(b.dataset.path)))
 
-const listings = initListings({ onTour: () => openTour('living') })
+const listings = initListings({ onTour: l => openTour(l) })
 const offer = initCashOffer()
 initInvest()
 initChat()
@@ -81,8 +82,31 @@ document.querySelectorAll('.reveal, .pcard, .section-head, .lcard, .note, .man-c
 new MutationObserver(() => document.querySelectorAll('.lcard:not(.in), .member:not(.in)').forEach(el => rio.observe(el))).observe(document.body, { childList: true, subtree: true })
 
 // 3D tour: load three.js only when the section approaches the viewport
-let tour = null, tourLoading = null
+let tour = null, tourLoading = null, tourListing = LISTINGS[0]
 const stage = document.getElementById('tourStage')
+const roomBar = document.getElementById('roomBar')
+const floorSeg = document.getElementById('floorSeg')
+const switchEl = document.getElementById('tourSwitch')
+const money = n => '$' + Math.round(n).toLocaleString('en-US')
+
+function renderSwitch() {
+  switchEl.innerHTML = `<span class="ts-label mono">${t('tour.pick')}</span><div class="ts-row">` + LISTINGS.map(l => `
+    <button type="button" class="ts-item${l.id === tourListing.id ? ' on' : ''}" data-tour-id="${l.id}" aria-pressed="${l.id === tourListing.id}">
+      <img src="/img/${l.img[0]}.webp" alt="" loading="lazy" width="96" height="64" />
+      <span><strong>${l.street.replace(' (Demo)', '')}</strong><small>${l.type === 'rent' ? money(l.price) + t('homes.mo') : money(l.price)} · ${l.beds} ${t('homes.bd')} · ${l.sqft.toLocaleString()} ${t('tour.sqft')}</small></span>
+    </button>`).join('') + '</div>'
+}
+function renderBadge() {
+  const l = tourListing, es = getLang() === 'es'
+  const st = STYLES[l.house.style].name[es ? 1 : 0]
+  const size = es ? `${Math.round(l.sqft / 10.764)} M²` : `${l.sqft.toLocaleString()} SQ FT`
+  document.getElementById('tourBadge').textContent = `${t('tour.demo')} · ${st.toUpperCase()} · ${size} · ${l.beds} ${es ? 'REC' : 'BD'} · ${l.baths} ${es ? 'BAÑOS' : 'BA'}`
+  floorSeg.hidden = !(l.house.stories > 1)
+}
+function renderRooms(active = 'overview') {
+  if (!tour) return
+  roomBar.innerHTML = tour.roomList().map(r => `<button type="button" data-room="${r.id}" class="${r.id === active ? 'active' : ''}">${r.label}</button>`).join('')
+}
 function loadTour() {
   if (tourLoading) return tourLoading
   tourLoading = import('./tour3d.js').then(({ createTour }) => {
@@ -91,9 +115,13 @@ function loadTour() {
         canvas: document.getElementById('tourCanvas'), stage,
         pinsEl: document.getElementById('tourPins'), measureEl: document.getElementById('measure'),
         loadingEl: document.getElementById('tourLoading'), padEl: document.getElementById('walkPad'), hintEl: document.getElementById('walkHint'),
-        onRoom: id => document.querySelectorAll('[data-room]').forEach(b => b.classList.toggle('active', b.dataset.room === id)),
+        onRoom: id => roomBar.querySelectorAll('[data-room]').forEach(b => { const on = b.dataset.room === id; b.classList.toggle('active', on); if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }),
+        onFloor: f => floorSeg.querySelectorAll('[data-floor]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.floor === f))),
         onWalk: on => { const b = document.getElementById('walkToggle'); b.setAttribute('aria-pressed', String(on)); b.querySelector('span').textContent = t(on ? 'tour.exitWalk' : 'tour.walk') },
       })
+      tour.load(tourListing, { first: true })
+      tour.setLight('day')
+      renderRooms()
     } catch (err) {
       console.warn('3D unavailable', err)
       document.getElementById('tourLoading').innerHTML = '<span>WebGL is not available on this device.</span>'
@@ -102,12 +130,21 @@ function loadTour() {
   })
   return tourLoading
 }
-new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { loadTour(); o.disconnect() } }, { rootMargin: '600px' }).observe(stage)
-async function openTour(room) {
-  document.getElementById('tour').scrollIntoView({ behavior: 'smooth' })
-  const tr = await loadTour(); if (tr && room) setTimeout(() => tr.goRoom(room), 500)
+function selectListing(l) {
+  tourListing = l
+  renderSwitch(); renderBadge()
+  if (tour) { tour.load(l); renderRooms() }
 }
-document.querySelectorAll('.rooms [data-room]').forEach(b => b.addEventListener('click', async () => { const tr = await loadTour(); tr && tr.goRoom(b.dataset.room) }))
+new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { loadTour(); o.disconnect() } }, { rootMargin: '600px' }).observe(stage)
+async function openTour(l) {
+  document.getElementById('tour').scrollIntoView({ behavior: 'smooth' })
+  if (l && l.id !== tourListing.id) { tourListing = l; renderSwitch(); renderBadge() }
+  const tr = await loadTour()
+  if (tr && l && tr.plan && tr.plan.listing.id !== l.id) { tr.load(l); renderRooms() }
+}
+switchEl.addEventListener('click', e => { const b = e.target.closest('[data-tour-id]'); if (b) selectListing(LISTINGS.find(x => x.id === b.dataset.tourId)) })
+roomBar.addEventListener('click', async e => { const b = e.target.closest('[data-room]'); if (!b) return; const tr = await loadTour(); tr && tr.goRoom(b.dataset.room) })
+floorSeg.addEventListener('click', async e => { const b = e.target.closest('[data-floor]'); if (!b) return; const tr = await loadTour(); tr && tr.setFloor(+b.dataset.floor) })
 document.querySelectorAll('[data-light]').forEach(b => b.addEventListener('click', async () => {
   const tr = await loadTour(); if (!tr) return
   tr.setLight(b.dataset.light)
@@ -115,10 +152,14 @@ document.querySelectorAll('[data-light]').forEach(b => b.addEventListener('click
 }))
 document.getElementById('stageToggle').addEventListener('change', async e => { const tr = await loadTour(); tr && tr.setStaging(e.target.checked) })
 document.getElementById('walkToggle').addEventListener('click', async () => { const tr = await loadTour(); tr && tr.toggleWalk() })
-onLang(() => { if (tour) { const b = document.getElementById('walkToggle'); b.querySelector('span').textContent = t(tour.walking ? 'tour.exitWalk' : 'tour.walk') } })
+onLang(() => {
+  renderSwitch(); renderBadge()
+  if (tour) { const a = roomBar.querySelector('.active'); renderRooms(a ? a.dataset.room : 'overview'); const b = document.getElementById('walkToggle'); b.querySelector('span').textContent = t(tour.walking ? 'tour.exitWalk' : 'tour.walk') }
+})
+renderSwitch(); renderBadge()
 
 document.getElementById('year').textContent = new Date().getFullYear()
 applyLang(initialLang())
 
 // debug hook for automated screenshots
-window.__iam = { loadTour, get tour() { return tour } }
+window.__iam = { loadTour, selectListing: id => selectListing(LISTINGS.find(x => x.id === id)), get tour() { return tour } }

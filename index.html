@@ -186,12 +186,18 @@
         <p class="lede" data-i18n="tour.lede">Spin the dollhouse, jump into any room, measure it, switch the light from noon to night and stage it with furniture. Buyers from Juárez, Fort Bliss or out of state can shortlist homes without the drive.</p>
       </div>
 
+      <div class="tour-switch" id="tourSwitch" role="group" aria-label="Choose a home"></div>
+
       <div class="tour-stage" id="tourStage">
         <canvas id="tourCanvas" aria-label="Interactive 3D model of a sample home" role="img"></canvas>
         <div class="tour-pins" id="tourPins" aria-hidden="false"></div>
 
         <div class="tour-top">
-          <div class="tour-badge glass"><span class="mono" data-i18n="tour.badge">DEMO MODEL · 1,420 SQ FT · 2 BD · 1 BA</span></div>
+          <div class="tour-left"><div class="tour-badge glass"><span class="mono" id="tourBadge">DEMO MODEL</span></div>
+          <div class="seg glass" id="floorSeg" role="group" aria-label="Floor" hidden>
+            <button type="button" data-floor="0" aria-pressed="true" data-i18n="tour.f1">1st floor</button>
+            <button type="button" data-floor="1" aria-pressed="false" data-i18n="tour.f2">2nd floor</button>
+          </div></div>
           <div class="seg glass" role="group" aria-label="Lighting">
             <button type="button" data-light="day" aria-pressed="true" data-i18n="tour.day">Day</button>
             <button type="button" data-light="sunset" aria-pressed="false" data-i18n="tour.sunset">Sunset</button>
@@ -200,13 +206,8 @@
         </div>
 
         <div class="tour-bottom">
-          <div class="rooms glass" role="group" aria-label="Rooms">
+          <div class="rooms glass" id="roomBar" role="group" aria-label="Rooms">
             <button type="button" data-room="overview" class="active" data-i18n="room.overview">Dollhouse</button>
-            <button type="button" data-room="living" data-i18n="room.living">Living</button>
-            <button type="button" data-room="kitchen" data-i18n="room.kitchen">Kitchen</button>
-            <button type="button" data-room="bedroom" data-i18n="room.bedroom">Primary bed</button>
-            <button type="button" data-room="bath" data-i18n="room.bath">Bath</button>
-            <button type="button" data-room="backyard" data-i18n="room.backyard">Backyard</button>
           </div>
           <div class="tour-tools glass">
             <label class="switch"><input type="checkbox" id="stageToggle" checked /><span class="track"></span><span data-i18n="tour.staging">Virtual staging</span></label>
