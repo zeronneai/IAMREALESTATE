@@ -1,7 +1,8 @@
 // Bilingual copy. Every visible string lives here in EN and ES.
 export const dict = {
   skip: ['Skip to content', 'Saltar al contenido'],
-  ribbon: ['Proposal preview by ZERONNE · Sample listings and figures are for demonstration only', 'Vista previa de propuesta por ZERONNE · Las propiedades y cifras de muestra son solo demostrativas'],
+  ribbonA: ['Proposal preview by', 'Vista previa de propuesta por'],
+  ribbonB: ['· Sample listings and figures are for demonstration only', '· Las propiedades y cifras de muestra son solo demostrativas'],
   'nav.buy': ['Buy', 'Comprar'],
   'nav.sell': ['Sell', 'Vender'],
   'nav.invest': ['Invest', 'Invertir'],

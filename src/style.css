@@ -498,3 +498,5 @@ details[open] .plus { background: var(--gold); } details[open] .plus::before { b
   html { scroll-behavior: auto; }
 }
 .seg[hidden] { display: none !important; }
+
+.ribbon .pra-mark { font-family: var(--display); font-weight: 700; letter-spacing: 0.32em; font-size: 1.08em; margin: 0 0.25em 0 0.4em; }
