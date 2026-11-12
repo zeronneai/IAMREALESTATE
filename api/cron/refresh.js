@@ -1,4 +1,5 @@
-// GET /api/cron/refresh  (Vercel Cron, daily). Pulls the month's notices when a source is configured and
+// GET /api/cron/refresh  (Vercel Cron, daily). Pulls the month's notices when a permitted source is configured, reads
+// them with the keyless parser and
 // stores them in Supabase (requires SUPABASE_SERVICE_ROLE_KEY). Protected by CRON_SECRET.
 import { fetchNotices } from '../sources/epcounty.js'
 
@@ -12,9 +13,11 @@ export default async function handler(req, res) {
   const months = [now, new Date(now.getFullYear(), now.getMonth() + 1, 1)].map(d => d.toISOString().slice(0, 7))
   const out = { months, pulled: 0, stored: 0, skipped: [] }
   for (const m of months) {
-    let notices = null
-    try { notices = await fetchNotices(m) } catch (e) { out.skipped.push(`${m}: ${e.message}`); continue }
-    if (!notices) { out.skipped.push('no source configured'); break }
+    let got = null
+    try { got = await fetchNotices(m) } catch (e) { out.skipped.push(`${m}: ${e.message}`); continue }
+    if (!got) { out.skipped.push('no source configured'); break }
+    if (got.blocked.length) out.skipped.push(`robots.txt blocked ${got.blocked.length} URL(s)`)
+    const notices = got.notices.map(n => ({ ...n.fields, confidence: n.confidence, score: n.score, source_url: n.source_url }))
     out.pulled += notices.length
     if (!url || !key) { out.skipped.push('supabase service key missing'); continue }
     const rows = notices.map(n => ({

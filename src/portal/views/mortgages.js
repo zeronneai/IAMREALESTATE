@@ -2,6 +2,8 @@ import { t } from '../i18n.js'
 import * as S from '../store.js'
 import { esc, money, date, modal, toast, icon, api, fileToDataURL, dropzone, $ } from '../ui.js'
 import { daysUntil } from '../score.js'
+import { readDocument } from '../pdfread.js'
+import { parseStatement } from '../parse/statement.js'
 
 export function mortgages(el) {
   const inv = S.inventory().filter(v => v.mortgage || (v.statements || []).length)
@@ -38,6 +40,7 @@ export function mortgages(el) {
     <div class="card fade-in"><h3>${esc(t('m.upload'))}</h3>
       <div class="f" style="margin-bottom:10px"><label>${esc(t('m.for'))}</label><select id="mfor">${S.inventory().filter(v => v.status !== 'sold').map(v => `<option value="${esc(v.id)}">${esc(v.address)}</option>`).join('')}</select></div>
       <div class="drop" id="mdrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>${esc(t('m.upload_hint'))}</p></div>
+      <div class="toolbar" style="margin-top:10px"><span class="muted" style="font-size:12.5px">${esc(t('i.try'))}:</span><button class="btn sm" data-msample>sample-mortgage-statement.pdf</button></div>
     </div>
   </div>
   <div class="tablewrap fade-in" style="max-height:none">
@@ -48,22 +51,25 @@ export function mortgages(el) {
 
   el.querySelectorAll('[data-paid]').forEach(b => b.onclick = () => { const [a, c] = b.dataset.paid.split('|'); S.markPaid(a, c) })
   dropzone($('#mdrop', el), files => handle(files[0], $('#mfor', el).value), { multiple: false, accept: 'application/pdf,image/*' })
+  el.querySelector('[data-msample]').onclick = async () => { const r = await fetch('/portal-samples/sample-mortgage-statement.pdf'); handle(new File([await r.blob()], 'sample-mortgage-statement.pdf', { type: 'application/pdf' }), $('#mfor', el).value) }
 }
 
 async function handle(file, invId) {
-  let data = {}, note = ''
-  const close0 = modal(`<h3>${esc(t('m.reading'))}</h3><div class="boot-bar" style="width:100%"></div><p class="muted">${esc(file.name)}</p>`)
+  let data = {}, conf = {}, note = '', score = 0
+  const close0 = modal(`<h3>${esc(t('m.reading'))}</h3><div class="boot-bar" style="width:100%"></div><p class="muted" id="mstat">${esc(file.name)}</p>`)
   try {
-    if (file.size > 3_300_000) throw new Error('too_large')
-    const url = await fileToDataURL(file)
-    const r = await api('/api/extract-statement', { file: url })
-    if (r.ok) data = r.data.data || {}
-    else note = t('m.ai_off')
-  } catch { note = t('m.ai_off') }
+    const doc = await readDocument(file, pg => { const n = document.getElementById('mstat'); if (n) n.textContent = `${file.name} · ${pg.stage === 'ocr' ? 'OCR ' + (pg.pct ?? 0) + '%' : (pg.page || 1) + '/' + (pg.pages || 1)}` })
+    const r = parseStatement(doc.text)
+    score = r.score; conf = r.confidence
+    const f = r.fields
+    data = { lender: f.lender, loan_number_last4: f.last4, statement_date: f.statementDate, payment_due_date: f.dueDate, amount_due: f.amountDue, principal_balance: f.balance, interest_rate: f.rate, principal_and_interest: f.payment, escrow: f.escrow, late_fee: f.lateFee, past_due_amount: f.pastDue }
+    conf = { lender: conf.lender, loan_number_last4: conf.last4, statement_date: conf.statementDate, payment_due_date: conf.dueDate, amount_due: conf.amountDue, principal_balance: conf.balance, interest_rate: conf.rate, principal_and_interest: conf.payment, escrow: conf.escrow, late_fee: conf.lateFee, past_due_amount: conf.pastDue }
+    if (doc.ocrPages) note = 'OCR'
+  } catch (e) { console.warn(e); note = t('toast.err') }
   close0()
-  const fld = (k, label, type = 'number', v = data[k]) => `<div class="f"><label>${esc(label)}</label><input name="${k}" type="${type}" value="${esc(v ?? '')}" step="any"/></div>`
-  modal(`<h3>${esc(t('m.review'))}</h3>${note ? `<div class="alert">${esc(note)}</div>` : '<div class="alert ok">AI ✓</div>'}
-    <form class="form-grid" data-f>
+  const fld = (k, label, type = 'number', v = data[k]) => `<div class="f conf-${conf[k] || (v != null && v !== '' ? 'high' : 'low')}"><label>${esc(label)}</label><input name="${k}" type="${type}" value="${esc(v ?? '')}" step="any"/></div>`
+  modal(`<h3>${esc(t('m.review'))}</h3><div class="alert ${score >= 80 ? 'ok' : ''}">${esc(t('i.conf'))} ${score}% · ${esc(t('s.keyless'))}${note ? ' · ' + esc(note) : ''}</div>
+    <form class="form-grid review-item" style="border:0;padding:0;background:none" data-f>
       ${fld('lender', t('m.lender'), 'text')}${fld('loan_number_last4', 'Loan # (last 4)', 'text')}
       ${fld('statement_date', 'Statement date', 'date')}${fld('payment_due_date', t('m.due'), 'date')}
       ${fld('amount_due', 'Amount due')}${fld('principal_balance', t('m.balance'))}

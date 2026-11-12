@@ -221,6 +221,50 @@ export function enrichFromEpcad(rows) {
   persist(); emit()
   return { updated }
 }
+
+// ---------- phase 2 helpers ----------
+export async function addLien(id, lien) {
+  const p = parcel(id); if (!p) return
+  p.liens = [...(p.liens || []), lien]; enrich(p)
+  if (sb && isUuid(id)) await sb.from('liens').insert({ parcel_id: id, lien_type: lien.type, holder: lien.holder, amount: lien.amount, recorded_date: lien.recorded || null })
+  persist(); emit()
+}
+export async function addTaxes(id, rows) {
+  const p = parcel(id); if (!p) return
+  const key = x => `${x.entity}|${x.year}|${x.amount}`
+  const have = new Set((p.taxes || []).map(key))
+  const fresh = rows.filter(x => !have.has(key(x)))
+  p.taxes = [...(p.taxes || []), ...fresh]; enrich(p)
+  if (sb && isUuid(id) && fresh.length) await sb.from('tax_bills').insert(fresh.map(x => ({ parcel_id: id, entity: x.entity, tax_year: x.year || null, amount_due: x.amount, delinquent: !!x.delinquent })))
+  persist(); emit()
+}
+export async function setContactFlag(id, value, patch) {
+  const p = parcel(id); const c = p?.contacts?.find(x => x.value === value); if (!c) return
+  Object.assign(c, patch)
+  if (sb && isUuid(id)) await sb.from('contacts').update({ dnc: c.dnc }).eq('parcel_id', id).eq('value', value)
+  persist(); emit()
+}
+// Apply an EPCAD (or other public record) patch without overwriting what the team typed by hand.
+export function applyEnrichment(id, patch, { silent = false } = {}) {
+  const p = parcel(id); if (!p || !patch) return false
+  for (const f of ['epcadId', 'marketValue', 'yearBuilt', 'sqft', 'lot', 'lastDeedDate', 'legal']) if (patch[f] != null && patch[f] !== '' && (p[f] == null || p[f] === '' || p[f] === 0 || f === 'marketValue' || f === 'lastDeedDate')) p[f] = patch[f]
+  if (patch.homestead) p.homestead = true
+  if (patch.over65) p.over65 = true
+  if (patch.owner) {
+    const o = patch.owner
+    if (!(p.owners || []).length) p.owners = [o]
+    else {
+      const first = p.owners[0]
+      if (!first.mailing && o.mailing) Object.assign(first, { mailing: o.mailing, mailingCity: o.mailingCity, mailingState: o.mailingState, mailingZip: o.mailingZip, absentee: o.absentee })
+      if (!p.owners.some(x => x.name.toUpperCase() === o.name.toUpperCase())) p.owners.push({ ...o, fromEpcad: true })
+    }
+  }
+  enrich(p)
+  if (sb && isUuid(id)) sbUpsertParcel(p)
+  if (!silent) { persist(); emit() }
+  return true
+}
+
 export function logImport(rec) { db.imports.unshift({ id: uid('imp'), at: new Date().toISOString(), ...rec }); if (sb) sb.from('imports').insert({ kind: rec.kind, file_name: rec.fileName, rows_in: rec.rowsIn, rows_ok: rec.rowsOk }); persist(); emit() }
 export function done() { persist(); emit() }
 export async function saveSettings(patch) {

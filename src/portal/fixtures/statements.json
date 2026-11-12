@@ -1,0 +1,46 @@
+[
+ {
+  "text": "Mr. Cooper\nMortgage Statement\nStatement Date 11/01/2026\nLoan Number 0004417731\nPayment Due Date 12/01/2026\nAmount Due $1,642.18\nIf payment is received after 12/16/2026, a late fee of $61.53 will be charged.\nExplanation of Amount Due\nPrincipal $412.77\nInterest $818.03\nEscrow (for Taxes and Insurance) $411.38\nRegular Monthly Payment $1,642.18\nTotal Fees Charged $0.00\nOverdue Payment $0.00\nAccount Information\nOutstanding Principal $164,233.91\nInterest Rate (Until 07/2045) 5.875%\n",
+  "expect": {
+   "lender": "Mr. Cooper",
+   "balance": 164233.91,
+   "payment": 1642.18,
+   "escrow": 411.38,
+   "amountDue": 1642.18,
+   "dueDate": "2026-12-01",
+   "statementDate": "2026-11-01",
+   "rate": 5.875,
+   "last4": "7731",
+   "lateFee": 61.53
+  }
+ },
+ {
+  "text": "ROCKET MORTGAGE\nMONTHLY STATEMENT\nLoan # ******2210\nStatement Date: November 3, 2026\nPayment Due: December 1, 2026\nTotal Amount Due $2,104.55\nPrincipal & Interest $1,588.20\nEscrow $516.35\nPast Due Amount $0.00\nLate Charge $79.41\nUnpaid Principal Balance $287,410.66\nInterest Rate 6.250%\n",
+  "expect": {
+   "lender": "Rocket Mortgage",
+   "balance": 287410.66,
+   "escrow": 516.35,
+   "amountDue": 2104.55,
+   "dueDate": "2026-12-01",
+   "statementDate": "2026-11-03",
+   "rate": 6.25,
+   "last4": "2210",
+   "lateFee": 79.41
+  }
+ },
+ {
+  "text": "GECU   Home Loans\nAccount Number 55-90018\nBilling Date 10/28/2026\nDue Date 11/15/2026\nMonthly Payment $988.40\nEscrow Payment $301.12\nTotal Due $1,289.52\nPrincipal Balance $118,902.04\nInterest Rate 4.125 %\nPast Due $1,289.52\n",
+  "expect": {
+   "lender": "GECU",
+   "balance": 118902.04,
+   "payment": 988.4,
+   "escrow": 301.12,
+   "amountDue": 1289.52,
+   "dueDate": "2026-11-15",
+   "statementDate": "2026-10-28",
+   "rate": 4.125,
+   "last4": "0018",
+   "pastDue": 1289.52
+  }
+ }
+]

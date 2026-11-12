@@ -1,6 +1,7 @@
 import { t, getLang } from './i18n.js'
 import * as S from './store.js'
 import { money, fmtDate } from './score.js'
+import { isDnc } from './dnc.js'
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 export const $ = (sel, root = document) => root.querySelector(sel)
@@ -24,6 +25,8 @@ export const ICON = {
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  route: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h7"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
 }
 export const icon = (k, cls = '') => `<svg viewBox="0 0 24 24" class="${cls}" aria-hidden="true">${ICON[k] || ''}</svg>`
 
@@ -49,9 +52,9 @@ export function toast(msg) {
   el.textContent = msg; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2600)
 }
 
-export function modal(html, onMount) {
+export function modal(html, onMount, opts = {}) {
   const m = document.createElement('div'); m.className = 'modal'
-  m.innerHTML = `<div class="box fade-in" role="dialog" aria-modal="true">${html}</div>`
+  m.innerHTML = `<div class="box fade-in ${opts.wide ? 'wide' : ''}" role="dialog" aria-modal="true">${html}</div>`
   document.body.append(m)
   const close = () => m.remove()
   m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-close]')) close() })
@@ -63,6 +66,7 @@ export function modal(html, onMount) {
 
 // ---------- selection + batch bar (shared across views) ----------
 export const selection = new Set()
+export const routeIds = []
 const selSubs = new Set()
 export const onSel = f => selSubs.add(f)
 export const selChanged = () => { selSubs.forEach(f => f()); renderBatch() }
@@ -76,6 +80,8 @@ export function renderBatch() {
     <button class="btn dark" data-act="list">${esc(t('sel.add'))}</button>
     <button class="btn" data-act="skip">${esc(t('sel.skip'))}</button>
     <button class="btn" data-act="export">${esc(t('sel.export'))}</button>
+    <button class="btn" data-act="mail">${esc(t('sel.mail'))}</button>
+    <button class="btn" data-act="route">${esc(t('sel.route'))}</button>
     <button class="btn" data-act="crm">${esc(t('sel.crm'))}</button>
     <button class="btn" data-act="copy">${esc(t('sel.copy'))}</button>
     <button class="btn" data-act="clear">${esc(t('sel.clear'))}</button>`
@@ -97,6 +103,8 @@ export async function batchAction(act, ids) {
   if (act === 'copy') return copyRows(ids)
   if (act === 'skip') return skipTrace(ids)
   if (act === 'crm') return pushCRM(ids)
+  if (act === 'mail') return import('./views/mailer.js').then(m => m.openMailer(ids))
+  if (act === 'route') { routeIds.splice(0, routeIds.length, ...ids); location.hash = '#/route'; return }
 }
 
 export function pickList(ids) {
@@ -148,7 +156,7 @@ export async function skipTrace(ids) {
   const res = await api('/api/skiptrace', { records: ps.map(p => ({ id: p.id, owner: p.owners?.[0]?.name || '', address: p.address, city: p.city, state: p.state, zip: p.zip })) }).catch(() => ({ status: 0 }))
   if (res.ok && Array.isArray(res.data.results)) {
     for (const r of res.data.results) {
-      const contacts = [...(r.phones || []).map(ph => ({ kind: 'phone', value: ph.number, phoneType: ph.type, dnc: !!ph.dnc, litigator: !!ph.litigator, confidence: ph.score, provider: res.data.provider })), ...(r.emails || []).map(em => ({ kind: 'email', value: em, provider: res.data.provider }))]
+      const contacts = [...(r.phones || []).map(ph => ({ kind: 'phone', value: ph.number, phoneType: ph.type, dnc: !!ph.dnc || isDnc(ph.number), litigator: !!ph.litigator, confidence: ph.score, provider: res.data.provider })), ...(r.emails || []).map(em => ({ kind: 'email', value: em, provider: res.data.provider }))]
       await S.addContacts(r.id, contacts)
       await S.addActivity(r.id, 'skiptrace', `Skip trace (${res.data.provider}): ${contacts.length} contacts`)
     }

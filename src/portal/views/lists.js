@@ -1,6 +1,7 @@
 import { t } from '../i18n.js'
 import * as S from '../store.js'
-import { esc, money, date, table, scorePill, statusPill, exportCSV, skipTrace, pushCRM, toast, selection, selChanged, icon } from '../ui.js'
+import { esc, money, date, table, scorePill, statusPill, exportCSV, skipTrace, pushCRM, toast, selection, selChanged, icon, routeIds } from '../ui.js'
+import { isDnc } from '../dnc.js'
 import { openDrawer } from '../drawer.js'
 
 let active = null
@@ -12,7 +13,7 @@ export function lists(el) {
   const cols = [
     { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<b>${esc(p.address)}</b><span>${esc(p.zip)}</span>` },
     { key: 'owner', label: t('c.owner'), render: p => esc(p.owners?.[0]?.name || 'n/a') },
-    { key: 'phone', label: t('c.phone'), render: p => { const ph = (p.contacts || []).filter(c => c.kind === 'phone'); return ph.length ? ph.map(c => `<span class="mono" style="${c.dnc ? 'text-decoration:line-through;color:var(--dim)' : ''}">${esc(c.value)}</span>`).join('<br/>') : '<span class="dim">n/a</span>' } },
+    { key: 'phone', label: t('c.phone'), render: p => { const ph = (p.contacts || []).filter(c => c.kind === 'phone'); return ph.length ? ph.map(c => `<span class="mono" style="${c.dnc || isDnc(c.value) ? 'text-decoration:line-through;color:var(--dim)' : ''}">${esc(c.value)}</span>`).join('<br/>') : '<span class="dim">n/a</span>' } },
     { key: 'sale', label: t('c.sale'), render: p => p.foreclosure ? `<span class="mono">${esc(date(p.foreclosure.saleDate))}</span>` : '<span class="dim">n/a</span>' },
     { key: 'equity', label: t('c.equity'), num: true, render: p => money(p._d.equity, true) },
     { key: 'score', label: t('c.score'), num: true, render: p => scorePill(p._score) },
@@ -39,7 +40,9 @@ export function lists(el) {
     <div style="display:grid;gap:14px;min-width:0">
       ${l ? `<div class="card"><h3>${esc(l.name)}<span class="r mono">${rows.length} · ${traced} ☎</span></h3>
         <div class="toolbar">
-          <button class="btn gold" data-a="skip">${esc(t('sel.skip'))} (${rows.length})</button>
+          <button class="btn gold" data-a="mail">${icon('mail')}${esc(t('sel.mail'))}</button>
+          <button class="btn gold" data-a="route">${icon('route')}${esc(t('sel.route'))}</button>
+          <button class="btn" data-a="skip">${esc(t('sel.skip'))} (${rows.length})</button>
           <button class="btn" data-a="reiskip">${icon('download')}${esc(t('lists.export_reiskip'))}</button>
           <button class="btn" data-a="ghl">${icon('download')}${esc(t('lists.export_ghl'))}</button>
           <button class="btn" data-a="generic">${icon('download')}${esc(t('lists.export_generic'))}</button>
@@ -57,6 +60,8 @@ export function lists(el) {
   el.querySelectorAll('[data-rm]').forEach(b => b.onclick = e => { e.stopPropagation(); S.removeFromList(l.id, b.dataset.rm) })
   el.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
     const a = b.dataset.a, ids = l.ids
+    if (a === 'mail') return import('./mailer.js').then(m => m.openMailer(ids))
+    if (a === 'route') { routeIds.splice(0, routeIds.length, ...ids); location.hash = '#/route'; return }
     if (a === 'skip') return skipTrace(ids)
     if (['reiskip', 'ghl', 'generic'].includes(a)) return exportCSV(ids, a)
     if (a === 'crm') return pushCRM(ids)

@@ -10,6 +10,7 @@ import { inventoryView } from './views/inventory.js'
 import { mortgages } from './views/mortgages.js'
 import { importer } from './views/importer.js'
 import { settingsView } from './views/settings.js'
+import { routeView } from './views/route.js'
 
 const ROUTES = {
   dashboard: { icon: 'dashboard', render: el => dashboard(el) },
@@ -18,8 +19,9 @@ const ROUTES = {
   lists: { icon: 'lists', render: el => lists(el), count: () => S.lists().length },
   inventory: { icon: 'inventory', render: el => inventoryView(el), count: () => S.inventory().length },
   mortgages: { icon: 'mortgages', render: el => mortgages(el) },
-  import: { icon: 'import', render: el => importer(el) },
-  settings: { icon: 'settings', render: el => settingsView(el) },
+  route: { icon: 'route', render: el => routeView(el), still: true },
+  import: { icon: 'import', render: el => importer(el), still: true },
+  settings: { icon: 'settings', render: el => settingsView(el), still: true },
 }
 const app = document.getElementById('app')
 
@@ -82,7 +84,7 @@ function route() {
 function refreshCounts() { $$('.nav a').forEach(a => { const r = ROUTES[a.dataset.r]; const c = a.querySelector('.count'); if (c && r.count) c.textContent = r.count() }) }
 
 let pend
-function rerender() { clearTimeout(pend); pend = setTimeout(() => { refreshCounts(); const { route: r } = parseHash(); if (!$('.modal')) ROUTES[r].render($('#view'), {}) }, 60) }
+function rerender() { clearTimeout(pend); pend = setTimeout(() => { refreshCounts(); const { route: r } = parseHash(); if (!$('.modal') && !ROUTES[r].still) ROUTES[r].render($('#view'), {}) }, 60) }
 
 function login() {
   app.className = ''

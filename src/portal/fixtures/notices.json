@@ -1,0 +1,84 @@
+[
+ {
+  "text": "FILED 2026 NOV 06 PM 2:56\nCOUNTY CLERK EL PASO COUNTY, TEXAS\nNOTICE OF SUBSTITUTE TRUSTEE'S SALE\nT.S. #: 26-48211-DEMO\nDate, Time, and Place of Sale:\nDate: December 1, 2026\nTime: The sale will begin no earlier than 10:00 AM or no later than three hours thereafter.\nPlace: El Paso County Coliseum, 4100 E. Paisano Drive, El Paso, Texas 79905, or as designated by the County Commissioners Court.\nDeed of Trust Date: March 20, 2002\nOriginal Mortgagor/Grantor: ROSA DEMO-NAVARRETE AND CARLOS DEMO-NAVARRETE\nOriginal Beneficiary/Mortgagee: SAMPLE HOME LOANS, INC.\nCurrent Beneficiary/Mortgagee: FICTIONAL LENDING CORP\nMortgage Servicer: EXAMPLE SERVICING COMPANY\nRecorded in: Instrument No. 20020012345 in the Official Public Records of El Paso County, Texas\nProperty County: EL PASO\nLegal Description: LOT 25, BLOCK 33, DEMO HEIGHTS UNIT NINE, AN ADDITION TO THE CITY OF EL PASO, EL PASO COUNTY, TEXAS, ACCORDING TO THE PLAT THEREOF RECORDED IN VOLUME 61, PAGE 12, PLAT RECORDS.\nProperty Address: 2193 GATEWAY BLVD N, EL PASO, TX 79924\nOriginal principal amount: $143,000.00\nSubstitute Trustee(s): Ana Demo-Ruiz, Mark Placeholder, Jane Sample\nSubstitute Trustee Address: 100 Example Plaza, Suite 200, Dallas, TX 75201\nTerms of Sale: The sale will be conducted as a public auction to the highest bidder for cash.\nExample Default Attorneys PC\nAttorneys for the Mortgage Servicer\n",
+  "expect": {
+   "sale_date": "2026-12-01",
+   "property_address": "2193 GATEWAY BLVD N",
+   "zip": "79924",
+   "mortgagee": "FICTIONAL LENDING CORP",
+   "servicer": "EXAMPLE SERVICING COMPANY",
+   "deed_of_trust_date": "2002-03-20",
+   "instrument_number": "20020012345",
+   "original_loan_amount": 143000,
+   "filing_date": "2026-11-06",
+   "grantors_len": 2,
+   "trustees_len": 3,
+   "legal_has": "BLOCK 33",
+   "window": "10:00 AM to 1:00 PM"
+  }
+ },
+ {
+  "text": "NOTICE OF TRUSTEE'S SALE\n\n1. Date, Time, and Place of Sale.\nDate: 12/01/2026\nTime: The sale will begin between the hours of 10:00 AM and 1:00 PM.\nPlace: THE AREA DESIGNATED BY THE COMMISSIONERS COURT OF EL PASO COUNTY, TEXAS.\n2. Terms of Sale. Cash.\n3. Instrument to be Foreclosed. The Instrument to be foreclosed is the Deed of Trust dated 08/14/2015 and recorded in Document 20150061177 real property records of El Paso County, Texas.\n4. Obligations Secured. The Deed of Trust executed by LUIS DEMO-PACHECO, provides that it secures the payment of the indebtedness in the original principal amount of $139,500.00, and obligations therein described.\nCurrent Mortgagee: MOCK CAPITAL MORTGAGE LLC\nMortgage Servicer: MOCK CAPITAL MORTGAGE LLC\n5. Property to be sold. LOT 4, BLOCK 12, SAMPLE VALLEY ESTATES UNIT TWO, AN ADDITION TO THE CITY OF EL PASO, EL PASO COUNTY, TEXAS.\nCommonly known as: 7777 MOON RD, SOCORRO, TX 79927\n6. Appointment of Substitute Trustees. Substitute Trustee(s): Peter Fakename, Maria Ejemplo, Tom Testcase\nPlaceholder Law Group, PLLC\n",
+  "expect": {
+   "sale_date": "2026-12-01",
+   "property_address": "7777 MOON RD",
+   "zip": "79927",
+   "mortgagee": "MOCK CAPITAL MORTGAGE LLC",
+   "deed_of_trust_date": "2015-08-14",
+   "instrument_number": "20150061177",
+   "original_loan_amount": 139500,
+   "grantors_len": 1,
+   "trustees_len": 3,
+   "legal_has": "LOT 4",
+   "window": "10:00 AM to 1:00 PM"
+  }
+ },
+ {
+  "text": "NOTICE OF FORECLOSURE SALE\nFILED NOV 09 2026\nSTATE OF TEXAS\nCOUNTY OF EL PASO\nWHEREAS, on June 3, 2011, a Deed of Trust was executed by DIANA DEMO-SAUCEDO, a single woman, as grantor, recorded under Clerk's File No. 20110043219 in the Official Public Records of El Paso County, Texas, covering the following described property:\nALL OF LOT 9, BLOCK 2, EXAMPLE PARK REPLAT A, AN ADDITION TO THE CITY OF EL PASO.\nProperty Address: 3791 Hunter Dr, El Paso, Texas 79915\nCurrent Mortgagee: SPECIMEN SERVICING CO\nNOW THEREFORE, notice is given that on Tuesday, December 1, 2026, the Substitute Trustee will sell the property at public auction at the El Paso County Coliseum. The earliest time the sale will begin is 10:00 AM.\nSubstitute Trustee(s): Gloria Muestra; Henry Notreal\nDemo & Associates, P.C.\n",
+  "expect": {
+   "sale_date": "2026-12-01",
+   "property_address": "3791 HUNTER DR",
+   "zip": "79915",
+   "mortgagee": "SPECIMEN SERVICING CO",
+   "deed_of_trust_date": "2011-06-03",
+   "instrument_number": "20110043219",
+   "filing_date": "2026-11-09",
+   "grantors_len": 1,
+   "trustees_len": 2,
+   "legal_has": "BLOCK 2",
+   "window": "10:00 AM"
+  }
+ },
+ {
+  "text": "NOTICE OF SUBSTITUTE TRUSTEE SALE\nDATE OF SALE: TUESDAY, JANUARY 5, 2027\nTIME OF SALE: 10:00 A.M. TO 1:00 P.M.\nPLACE OF SALE: EL PASO COUNTY COLISEUM, OR AS DESIGNATED BY THE COMMISSIONERS COURT\nGRANTOR(S): LINDA DEMO-RENTERIA AND JOSE DEMO-RENTERIA\nORIGINAL MORTGAGEE: PLACEHOLDER BANK NA\nCURRENT MORTGAGEE: PLACEHOLDER BANK NA\nDEED OF TRUST DATED: 04/22/2019\nRECORDED AS INSTRUMENT NO. 20190031415\nORIGINAL LOAN AMOUNT: $226,800.00\nPROPERTY ADDRESS: 4934 BELVIDERE ST, EL PASO, TX 79932\nLEGAL DESCRIPTION: LOT 18, BLOCK 7, CORONADO DEMO ESTATES UNIT 3, EL PASO COUNTY, TEXAS\nSUBSTITUTE TRUSTEES: RAY EXEMPLAR, SUSAN FICTICIA, OMAR PRUEBA, LISA DUMMY\nFICTIONAL FORECLOSURE LLP\n",
+  "expect": {
+   "sale_date": "2027-01-05",
+   "property_address": "4934 BELVIDERE ST",
+   "zip": "79932",
+   "mortgagee": "PLACEHOLDER BANK NA",
+   "deed_of_trust_date": "2019-04-22",
+   "instrument_number": "20190031415",
+   "original_loan_amount": 226800,
+   "grantors_len": 2,
+   "trustees_len": 4,
+   "legal_has": "BLOCK 7",
+   "window": "10:00 AM to 1:00 PM"
+  }
+ },
+ {
+  "text": "Notice of Substitute Trustee's Sale\nLoan No.: XXXXXX7731\nMortgagor(s): Patricia Demo-Montoya\nCurrent Mortgagee: Sample Mortgage Servicing LLC\nMortgage Servicer: Sample Mortgage Servicing LLC\nSecurity Instrument Date: September 30, 2008\nRecording Information: Document No. 20080090912\nProperty Address: 5501 McCombs St Apt 2, El Paso, TX 79924\nLegal Description: Lot 31, Block 5, Northeast Demo Subdivision, an addition to the City of El Paso, El Paso County, Texas\nDate of Sale: December 1, 2026\nTime of Sale: Sale will begin at 10:00 AM or within three hours thereafter\nPlace of Sale: El Paso County Coliseum\nSubstitute Trustee(s): Carmen Ejemplo, David Pretend\nOriginal Principal Amount: $96,250.00\nExample Default Attorneys PC\n",
+  "expect": {
+   "sale_date": "2026-12-01",
+   "property_address": "5501 MCCOMBS ST APT 2",
+   "zip": "79924",
+   "mortgagee": "Sample Mortgage Servicing LLC",
+   "deed_of_trust_date": "2008-09-30",
+   "instrument_number": "20080090912",
+   "original_loan_amount": 96250,
+   "grantors_len": 1,
+   "trustees_len": 2,
+   "legal_has": "Block 5",
+   "window": "10:00 AM to 1:00 PM"
+  }
+ }
+]

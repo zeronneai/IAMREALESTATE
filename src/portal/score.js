@@ -12,7 +12,7 @@ export function derive(p) {
   const otherLiens = (p.liens || []).filter(l => l.type !== 'mortgage').reduce((s, l) => s + (l.amount || 0), 0)
   const taxDue = (p.taxes || []).filter(x => x.delinquent).reduce((s, x) => s + (x.amount || 0), 0)
   const debt = mortgageBal + otherLiens + taxDue
-  const equity = value - debt
+  const equity = value ? value - debt : null // unknown until a value comes from EPCAD or the team
   const equityPct = value ? Math.round((equity / value) * 100) : 0
   const yearsOwned = p.lastDeedDate ? Math.max(0, Math.floor((today() - new Date(p.lastDeedDate)) / (365.25 * DAY))) : null
   const absentee = (p.owners || []).some(o => o.absentee)

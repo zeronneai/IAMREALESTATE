@@ -2,6 +2,12 @@
 import { t } from './i18n.js'
 import * as S from './store.js'
 import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast } from './ui.js'
+import { researchLinks } from './research.js'
+import * as DNC from './dnc.js'
+import * as EP from './epcad.js'
+
+DNC.ready().catch(() => {})
+EP.ready().catch(() => {})
 
 const STATUSES = ['new', 'contacted', 'appointment', 'offer', 'under_contract', 'dead']
 let current = null
@@ -45,7 +51,7 @@ function render(dr) {
       <button class="btn gold sm" data-skip>${icon('phone')}${esc(t('d.skip'))}</button>
       <button class="btn sm" data-list>${esc(t('sel.add'))}</button>
       <a class="btn sm ghost" href="${gmaps}" target="_blank" rel="noopener">${esc(t('d.maps'))}</a>
-      <a class="btn sm ghost" href="https://epcad.org/Search" target="_blank" rel="noopener">${esc(t('d.epcad'))}</a>
+      <button class="btn sm ghost" data-epm>${esc(t('d.epcad_match'))}</button>
       <a class="btn sm ghost" href="https://actweb.acttax.com/act_webdev/elpaso/index.jsp" target="_blank" rel="noopener">${esc(t('d.taxoffice'))}</a>
     </div>
   </div>
@@ -64,9 +70,17 @@ function render(dr) {
       ${(p.owners || []).map(o => `<div class="owner"><b>${esc(o.name)}</b>${o.deceased ? ' <span class="pill gold">Probate</span>' : ''}
         <span class="muted" style="font-size:12.5px">${esc(t('d.mailing'))}: ${esc([o.mailing, o.mailingCity, o.mailingState, o.mailingZip].filter(Boolean).join(', ') || 'n/a')} ${o.absentee ? `<span class="pill blue">${esc(t('d.absentee'))}</span>` : ''}</span></div>`).join('') || `<p class="muted">n/a</p>`}
       <div style="display:grid;gap:8px;margin-top:10px">
-        ${(p.contacts || []).length ? p.contacts.map(c => `<div class="contact">${c.kind === 'phone' ? icon('phone', 'ic') : '@'} ${c.kind === 'phone' && !c.dnc ? `<a href="tel:${esc(c.value.replace(/\D/g, ''))}">${esc(c.value)}</a>` : `<span class="mono">${esc(c.value)}</span>`}
-          ${c.phoneType ? `<span class="pill">${esc(c.phoneType)}</span>` : ''}${c.dnc ? `<span class="pill bad">${esc(t('d.dnc'))}</span>` : ''}${c.litigator ? `<span class="pill bad">${esc(t('d.litigator'))}</span>` : ''}${c.confidence ? `<span class="dim mono" style="font-size:11px">${c.confidence}%</span>` : ''}${c.provider ? `<span class="dim" style="font-size:11px">${esc(c.provider)}</span>` : ''}</div>`).join('') : `<p class="muted" style="margin:0">${esc(t('d.no_contacts'))}</p>`}
+        ${(p.contacts || []).length ? p.contacts.map(c => { const dnc = c.kind === 'phone' && (c.dnc || DNC.isDnc(c.value)); return `<div class="contact">${c.kind === 'phone' ? icon('phone', 'ic') : '@'} ${c.kind === 'phone' && !dnc ? `<a href="tel:${esc(c.value.replace(/\D/g, ''))}">${esc(c.value)}</a> <a class="dim" style="font-size:11px" href="sms:${esc(c.value.replace(/\D/g, ''))}">SMS</a>` : c.kind === 'email' ? `<a href="mailto:${esc(c.value)}">${esc(c.value)}</a>` : `<span class="mono dnc-off">${esc(c.value)}</span>`}
+          ${c.phoneType ? `<span class="pill">${esc(c.phoneType)}</span>` : ''}${dnc ? `<span class="pill bad">${esc(t('d.dnc'))}</span>` : ''}${c.litigator ? `<span class="pill bad">${esc(t('d.litigator'))}</span>` : ''}${c.confidence ? `<span class="dim mono" style="font-size:11px">${c.confidence}%</span>` : ''}${c.provider ? `<span class="dim" style="font-size:11px">${esc(c.provider)}${c.foundAt ? ' · ' + esc(date(c.foundAt)) : ''}</span>` : ''}${c.kind === 'phone' && !dnc ? `<button class="btn sm ghost" style="height:24px;font-size:11px;margin-left:auto" data-dnc="${esc(c.value)}">${esc(t('dnc.flag'))}</button>` : ''}</div>` }).join('') : `<p class="muted" style="margin:0">${esc(t('d.no_contacts'))}</p>`}
+        ${(p.contacts || []).some(c => c.kind === 'phone' && (c.dnc || DNC.isDnc(c.value))) ? `<div class="dnc-note">${esc(t('dnc.blocked'))}</div>` : ''}
+        ${(p.contacts || []).some(c => c.kind === 'phone') ? `<div class="muted" style="font-size:11.5px">${esc(t('dnc.reminder'))}</div>` : ''}
       </div>
+    </div>
+
+    <div class="sec"><h4>${esc(t('r.title'))}</h4>
+      <p class="muted" style="margin:0 0 8px;font-size:12px">${esc(t('r.hint'))}</p>
+      <div class="research">${['people', 'records', 'place'].map(g => `<div class="grp"><span>${esc(t('r.' + g))}</span>${researchLinks(p).filter(l => l.group === g).map(l => `<a class="btn sm ghost" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" data-rl="${esc(l.label)}">${esc(l.label)}</a>`).join('')}</div>`).join('')}</div>
+      <form class="inline-form" data-cf style="margin-top:10px"><input name="value" placeholder="${esc(t('r.value'))}" required /><input name="source" placeholder="${esc(t('r.source'))}" style="flex:0 0 150px" list="srcs" /><datalist id="srcs"><option>TruePeopleSearch</option><option>FastPeopleSearch</option><option>Whitepages</option><option>Facebook</option><option>Door knock</option><option>Owner called in</option></datalist><button class="btn sm">${esc(t('r.add'))}</button></form>
     </div>
 
     <div class="sec"><h4>${esc(t('d.money'))}</h4>
@@ -97,6 +111,7 @@ function render(dr) {
       <div><span>${esc(t('d.sqft'))}</span><b class="mono">${p.sqft ? p.sqft.toLocaleString() + ' sqft' : 'n/a'}</b></div>
       <div><span>${esc(t('d.bedbath'))}</span><b>${esc(p.beds ?? 'n/a')} / ${esc(p.baths ?? 'n/a')}</b></div>
       <div><span>${esc(t('d.lot'))}</span><b class="mono">${p.lot ? p.lot.toLocaleString() + ' sqft' : 'n/a'}</b></div>
+      ${p.homestead || p.over65 ? `<div><span>EPCAD</span><b>${p.homestead ? esc(t('d.homestead')) : ''}${p.homestead && p.over65 ? ' · ' : ''}${p.over65 ? esc(t('d.over65')) : ''}</b></div>` : ''}
       <div style="grid-column:1/-1"><span>${esc(t('d.legal'))}</span><b class="mono" style="font-size:12px">${esc(p.legal || 'n/a')}</b></div>
     </div></div>
 
@@ -106,6 +121,7 @@ function render(dr) {
 
     <div class="sec"><h4>${esc(t('d.liens'))}</h4>
       ${(p.liens || []).length ? `<table class="mini"><tr><th>Type</th><th>Holder</th><th class="num">Amount</th><th>Recorded</th></tr>${p.liens.map(l => `<tr><td><span class="pill">${esc(l.type)}</span></td><td>${esc(l.holder || '')}</td><td class="num">${money(l.amount)}</td><td class="mono" style="font-size:11.5px">${esc(date(l.recorded))}</td></tr>`).join('')}</table>` : `<p class="muted" style="margin:0">${esc(t('d.none'))}</p>`}
+      <form class="inline-form" data-lf style="margin-top:10px"><select name="type" class="inp" style="flex:0 0 120px"><option value="mortgage">mortgage</option><option value="heloc">HELOC</option><option value="judgment">judgment</option><option value="hoa">HOA</option><option value="mechanic">mechanic</option><option value="irs">IRS</option><option value="child_support">child support</option><option value="other">other</option></select><input name="holder" placeholder="${esc(t('l.holder'))}" /><input name="amount" type="number" step="any" placeholder="${esc(t('l.amount'))}" style="flex:0 0 110px" /><input name="recorded" type="date" style="flex:0 0 140px" /><button class="btn sm">${esc(t('l.add'))}</button></form>
     </div>
 
     <div class="sec"><h4>${esc(t('d.why'))} · ${p._score}/100</h4><div class="why">${why}</div></div>
@@ -131,6 +147,16 @@ function render(dr) {
   dr.querySelectorAll('[data-task]').forEach(c => c.onchange = () => S.toggleTask(p.id, c.dataset.task))
   $('[data-taskf]', dr).onsubmit = e => { e.preventDefault(); const fd = new FormData(e.target); S.addTask(p.id, fd.get('title'), fd.get('due')) }
   $('[data-actf]', dr).onsubmit = e => { e.preventDefault(); const fd = new FormData(e.target); S.addActivity(p.id, fd.get('kind'), fd.get('body')) }
+  dr.querySelectorAll('[data-dnc]').forEach(b => b.onclick = async () => { await DNC.addManual(b.dataset.dnc); await S.setContactFlag(p.id, b.dataset.dnc, { dnc: true }); await S.addActivity(p.id, 'dnc', `DNC: ${b.dataset.dnc}`) })
+  $('[data-cf]', dr).onsubmit = async e => {
+    e.preventDefault(); const fd = new FormData(e.target); const v = String(fd.get('value')).trim(); const src = String(fd.get('source') || 'manual').trim() || 'manual'
+    const isMail = /@/.test(v); const val = isMail ? v : v.replace(/[^\d+()\- ]/g, '')
+    await S.addContacts(p.id, [{ kind: isMail ? 'email' : 'phone', value: val, provider: src, foundAt: new Date().toISOString().slice(0, 10), dnc: !isMail && DNC.isDnc(val) }])
+    await S.addActivity(p.id, 'contact', `${isMail ? 'Email' : 'Phone'} ${val} (${src})`)
+  }
+  $('[data-lf]', dr).onsubmit = async e => { e.preventDefault(); const fd = new FormData(e.target); await S.addLien(p.id, { type: fd.get('type'), holder: fd.get('holder'), amount: +fd.get('amount') || 0, recorded: fd.get('recorded') || null }) }
+  $('[data-epm]', dr).onclick = async () => { await EP.ready().catch(() => null); const patch = EP.patchFor(p); if (!patch) return toast(t('d.epcad_nomatch')); S.applyEnrichment(p.id, patch); S.addActivity(p.id, 'epcad', `EPCAD ${patch.epcadId}`); toast('EPCAD ✓') }
+  dr.querySelectorAll('[data-rl]').forEach(a => a.addEventListener('click', () => S.addActivity(p.id, 'research', a.dataset.rl)))
   const notes = $('[data-notes]', dr)
   notes.onchange = () => { S.updateParcel(p.id, { notes: notes.value }); toast(t('toast.saved')) }
 }
