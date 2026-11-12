@@ -89,3 +89,7 @@ El modelo procedural es la demo. Para cada propiedad real:
 - Links reales de Facebook e Instagram, aviso de privacidad y términos.
 - Sustituir propiedades demo por inventario real y fotos propias.
 - Cargar reseñas reales de Google en los espacios de testimonios.
+
+## Portal del equipo
+
+Sistema interno de remates, leads, inventario y estados de hipoteca en `/portal`. Ver `docs/PORTAL_README.md`.

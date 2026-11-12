@@ -262,6 +262,7 @@ export const dict = {
   'foot.iabs': ['Texas Real Estate Commission Information About Brokerage Services', 'Información sobre Servicios de Corretaje (TREC)'],
   'foot.cpn': ['Texas Real Estate Commission Consumer Protection Notice', 'Aviso de Protección al Consumidor (TREC)'],
   'foot.eho': ['Equal Housing Opportunity', 'Igualdad de Oportunidad en Vivienda'],
+  'foot.portal': ['Team portal', 'Portal del equipo'],
   'foot.rights': ['All rights reserved.', 'Todos los derechos reservados.'],
 
   'chat.fab': ['Ask IAM', 'Pregúntale a IAM'],

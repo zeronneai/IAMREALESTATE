@@ -500,3 +500,6 @@ details[open] .plus { background: var(--gold); } details[open] .plus::before { b
 .seg[hidden] { display: none !important; }
 
 .ribbon .pra-mark { font-family: var(--display); font-weight: 700; letter-spacing: 0.32em; font-size: 1.08em; margin: 0 0.25em 0 0.4em; }
+
+.foot-links .team-portal { opacity: .45; font-size: 12px; margin-top: 6px; }
+.foot-links .team-portal:hover { opacity: 1; color: var(--gold); }

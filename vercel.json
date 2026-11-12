@@ -1,0 +1,11 @@
+{
+  "rewrites": [{ "source": "/portal", "destination": "/portal/index.html" }],
+  "functions": {
+    "api/extract-notice.js": { "maxDuration": 60 },
+    "api/extract-statement.js": { "maxDuration": 60 },
+    "api/skiptrace.js": { "maxDuration": 60 },
+    "api/sources/epcounty.js": { "maxDuration": 60 },
+    "api/cron/refresh.js": { "maxDuration": 60 }
+  },
+  "crons": [{ "path": "/api/cron/refresh", "schedule": "0 13 * * *" }]
+}
