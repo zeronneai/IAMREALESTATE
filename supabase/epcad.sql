@@ -37,11 +37,11 @@ create index if not exists epcad_parcels_updated_idx on epcad_parcels(updated_at
 
 alter table epcad_parcels enable row level security;
 drop policy if exists epcad_read on epcad_parcels;
-create policy epcad_read on epcad_parcels for select using (is_team());
+create policy epcad_read on epcad_parcels for select using ((select is_team()));
 drop policy if exists epcad_insert on epcad_parcels;
-create policy epcad_insert on epcad_parcels for insert with check (is_team_writer());
+create policy epcad_insert on epcad_parcels for insert with check ((select is_team_writer()));
 drop policy if exists epcad_update on epcad_parcels;
-create policy epcad_update on epcad_parcels for update using (is_team_writer()) with check (is_team_writer());
+create policy epcad_update on epcad_parcels for update using ((select is_team_writer())) with check ((select is_team_writer()));
 
 -- Let the API roles see the new table right away.
 notify pgrst, 'reload schema';

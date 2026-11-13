@@ -115,7 +115,7 @@ async function buildLegacy(files, onProgress) {
 
 // ---------- server index (Supabase table epcad_parcels) ----------
 const UP_KEY = 'iam_epcad_upload'
-const BATCH = 1000
+const BATCH = 500
 export function uploadState() { try { return JSON.parse(localStorage.getItem(UP_KEY) || 'null') } catch { return null } }
 const setUploadState = v => { try { localStorage.setItem(UP_KEY, JSON.stringify(v)) } catch {} }
 let stopFlag = false
@@ -137,10 +137,16 @@ export async function uploadToServer(onProgress) {
     const now = new Date().toISOString()
     const rows = list.slice(i, i + BATCH).map(({ legal_key, ...r }) => ({ ...sanitize(r), updated_at: now }))
     let err = null
-    for (let a = 0; a < 4; a++) {
-      const { error } = await sb.from('epcad_parcels').upsert(rows, { onConflict: 'prop_id' })
-      if (!error) { err = null; break }
-      err = error; await new Promise(r => setTimeout(r, 800 * (a + 1)))
+    for (let a = 0; a < 5; a++) {
+      // on a timeout (500) send the batch in smaller pieces
+      const size = a < 2 ? rows.length : Math.max(50, Math.ceil(rows.length / (2 ** (a - 1))))
+      err = null
+      for (let j = 0; j < rows.length && !err; j += size) {
+        const { error } = await sb.from('epcad_parcels').upsert(rows.slice(j, j + size), { onConflict: 'prop_id', returning: 'minimal' })
+        if (error) err = error
+      }
+      if (!err) break
+      await new Promise(r => setTimeout(r, 1000 * (a + 1)))
     }
     if (err) { setUploadState({ builtAt, total: list.length, done: i }); const e = new Error(err.message || 'upload_failed'); e.code = /relation .*epcad_parcels.* does not exist|schema cache/i.test(err.message || '') ? 'no_table' : 'upload_failed'; e.done = i; throw e }
     const done = Math.min(i + BATCH, list.length)
@@ -152,7 +158,7 @@ export async function uploadToServer(onProgress) {
 }
 export async function serverStatus() {
   const sb = S.client(); if (!sb) return null
-  const { count, error } = await sb.from('epcad_parcels').select('prop_id', { count: 'exact', head: true })
+  const { count, error } = await sb.from('epcad_parcels').select('prop_id', { count: 'estimated', head: true })
   if (error) return { error: /does not exist|schema cache/i.test(error.message || '') ? 'no_table' : error.message }
   if (!count) return { count: 0 }
   const { data } = await sb.from('epcad_parcels').select('updated_at').order('updated_at', { ascending: false }).limit(1)
