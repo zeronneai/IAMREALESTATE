@@ -46,7 +46,7 @@ function render(dr) {
     <button class="btn ghost sm x" data-x aria-label="${esc(t('d.close'))}">${icon('x')}</button>
     <div class="chips">${(p.tags || []).map(tagPill).join('')}${p.demo ? '<span class="pill">DEMO</span>' : ''}</div>
     <h2>${esc(p.address)}</h2>
-    <div class="muted">${esc(p.city)}, ${esc(p.state)} ${esc(p.zip)} · ${esc(p.type || '')} ${p.epcadId ? '· EPCAD ' + esc(p.epcadId) : ''}</div>
+    <div class="muted">${esc([`${p.city || ''}, ${p.state || ''} ${p.zip || ''}`.trim(), p.type, p.epcadId ? 'EPCAD ' + p.epcadId : ''].filter(Boolean).join(' · '))}</div>
     <div class="links" style="margin-top:12px">
       <button class="btn gold sm" data-skip>${icon('phone')}${esc(t('d.skip'))}</button>
       <button class="btn sm" data-list>${esc(t('sel.add'))}</button>
