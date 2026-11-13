@@ -85,7 +85,7 @@ function render(dr) {
 
     <div class="sec"><h4>${esc(t('d.money'))}</h4>
       <div class="money-row">
-        <div><span>${esc(t('d.value'))}</span><b>${money(d.value)}</b></div>
+        <div><span>${esc(t('d.value'))}</span><b>${money(d.value)}${p.valueEstimated ? ` <small class="pill" title="${esc(t('d.value_est_hint'))}">${esc(t('d.value_est'))}</small>` : ''}</b></div>
         <div><span>${esc(t('d.balance'))}</span><b>${money(d.mortgageBal)}</b></div>
         <div><span>${esc(t('d.equity'))}</span><b style="color:${d.equity > 0 ? 'var(--ok)' : 'var(--bad)'}">${money(d.equity)}</b><span class="mono">${d.equityPct}%</span></div>
       </div>
@@ -155,7 +155,7 @@ function render(dr) {
     await S.addActivity(p.id, 'contact', `${isMail ? 'Email' : 'Phone'} ${val} (${src})`)
   }
   $('[data-lf]', dr).onsubmit = async e => { e.preventDefault(); const fd = new FormData(e.target); await S.addLien(p.id, { type: fd.get('type'), holder: fd.get('holder'), amount: +fd.get('amount') || 0, recorded: fd.get('recorded') || null }) }
-  $('[data-epm]', dr).onclick = async () => { await EP.ready().catch(() => null); const patch = EP.patchFor(p); if (!patch) return toast(t('d.epcad_nomatch')); S.applyEnrichment(p.id, patch); S.addActivity(p.id, 'epcad', `EPCAD ${patch.epcadId}`); toast('EPCAD ✓') }
+  $('[data-epm]', dr).onclick = async () => { const patch = await EP.patchForAsync(p).catch(() => null); if (!patch) return toast(t('d.epcad_nomatch')); S.applyEnrichment(p.id, patch); S.addActivity(p.id, 'epcad', `EPCAD ${patch.epcadId}`); toast('EPCAD ✓') }
   dr.querySelectorAll('[data-rl]').forEach(a => a.addEventListener('click', () => S.addActivity(p.id, 'research', a.dataset.rl)))
   const notes = $('[data-notes]', dr)
   notes.onchange = () => { S.updateParcel(p.id, { notes: notes.value }); toast(t('toast.saved')) }

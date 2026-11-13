@@ -29,6 +29,9 @@ function enrich(p) {
   if (s.d.absentee) tags.add('absentee')
   if (s.d.taxDue > 0) tags.add('tax_delinquent')
   if (p.foreclosure) tags.add('foreclosure')
+  if (p.homestead) tags.add('homestead')
+  if (p.over65) tags.add('over65')
+  if (p.valueEstimated) tags.add('value_est'); else tags.delete('value_est')
   p.tags = [...tags]
   return p
 }
@@ -60,6 +63,7 @@ export async function init() {
   await loadRemote()
   return { ready: true }
 }
+export const client = () => sb
 export const authHeader = () => (session ? { Authorization: `Bearer ${session.access_token}` } : {})
 export async function sendMagicLink(email) {
   const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + '/portal/' } })
@@ -249,22 +253,39 @@ export async function setContactFlag(id, value, patch) {
 // Apply an EPCAD (or other public record) patch without overwriting what the team typed by hand.
 export function applyEnrichment(id, patch, { silent = false } = {}) {
   const p = parcel(id); if (!p || !patch) return false
-  for (const f of ['epcadId', 'marketValue', 'yearBuilt', 'sqft', 'lot', 'lastDeedDate', 'legal']) if (patch[f] != null && patch[f] !== '' && (p[f] == null || p[f] === '' || p[f] === 0 || f === 'marketValue' || f === 'lastDeedDate')) p[f] = patch[f]
+  for (const f of ['epcadId', 'yearBuilt', 'sqft', 'lot', 'lastDeedDate', 'legal']) if (patch[f] != null && patch[f] !== '' && (p[f] == null || p[f] === '' || p[f] === 0 || f === 'lastDeedDate')) p[f] = patch[f]
+  // Value: a real EPCAD value always wins; an estimate (sqft x $/sqft) only fills an empty or earlier estimated value.
+  if (patch.marketValue != null) {
+    if (!patch.valueEstimated) { p.marketValue = patch.marketValue; p.valueEstimated = false }
+    else if (!p.marketValue || p.valueEstimated) { p.marketValue = patch.marketValue; p.valueEstimated = true }
+  }
+  if (patch.lastDeed) p.lastDeed = patch.lastDeed
   if (patch.homestead) p.homestead = true
   if (patch.over65) p.over65 = true
   if (patch.owner) {
     const o = patch.owner
-    if (!(p.owners || []).length) p.owners = [o]
+    if (!(p.owners || []).length) p.owners = [{ ...o, fromEpcad: true }]
     else {
       const first = p.owners[0]
-      if (!first.mailing && o.mailing) Object.assign(first, { mailing: o.mailing, mailingCity: o.mailingCity, mailingState: o.mailingState, mailingZip: o.mailingZip, absentee: o.absentee })
-      if (!p.owners.some(x => x.name.toUpperCase() === o.name.toUpperCase())) p.owners.push({ ...o, fromEpcad: true })
+      if (o.mailing && (!first.mailing || first.fromEpcad)) { Object.assign(first, { mailing: o.mailing, mailingCity: o.mailingCity, mailingState: o.mailingState, mailingZip: o.mailingZip, absentee: o.absentee }); first._dirty = true }
+      const same = n => String(n || '').toUpperCase().replace(/[^A-Z]/g, '')
+      const words = n => new Set(String(n || '').toUpperCase().split(/[^A-Z]+/).filter(w => w.length > 1))
+      const isSame = (a, b) => { if (same(a) === same(b)) return true; const A = words(a), B = words(b); let h = 0; for (const w of A) if (B.has(w)) h++; return h >= 2 }
+      if (o.name && !p.owners.some(x => isSame(x.name, o.name))) p.owners.push({ ...o, fromEpcad: true })
     }
+    for (const n of patch.extraOwners || []) if (!p.owners.some(x => String(x.name).toUpperCase() === n.toUpperCase())) p.owners.push({ name: n, mailing: o.mailing, mailingCity: o.mailingCity, mailingState: o.mailingState, mailingZip: o.mailingZip, absentee: o.absentee, fromEpcad: true })
   }
   enrich(p)
-  if (sb && isUuid(id)) sbUpsertParcel(p)
+  if (sb && isUuid(id)) { sbUpsertParcel(p); sbSyncOwners(p) }
   if (!silent) { persist(); emit() }
   return true
+}
+async function sbSyncOwners(p) {
+  for (const o of p.owners || []) {
+    const row = { parcel_id: p.id, name: o.name, mailing_address: o.mailing, mailing_city: o.mailingCity, mailing_state: o.mailingState, mailing_zip: o.mailingZip, is_absentee: !!o.absentee }
+    if (o.id && isUuid(o.id)) { if (o._dirty) { await sb.from('owners').update(row).eq('id', o.id); o._dirty = false } }
+    else { const { data } = await sb.from('owners').insert(row).select('id').single(); if (data) o.id = data.id }
+  }
 }
 
 export function logImport(rec) { db.imports.unshift({ id: uid('imp'), at: new Date().toISOString(), ...rec }); if (sb) sb.from('imports').insert({ kind: rec.kind, file_name: rec.fileName, rows_in: rec.rowsIn, rows_ok: rec.rowsOk }); persist(); emit() }
@@ -307,7 +328,7 @@ function fromRow(r) {
   return {
     id: r.id, address: r.address, city: r.city, state: r.state, zip: r.zip, lat: r.lat, lng: r.lng, epcadId: r.epcad_property_id, legal: r.legal_description, type: r.property_type,
     yearBuilt: r.year_built, sqft: r.sqft, beds: r.beds, baths: r.baths, lot: r.lot_sqft, marketValue: +r.market_value || 0, lastDeedDate: r.last_deed_date, lastSalePrice: r.last_sale_price,
-    vacant: r.vacant, tags: r.tags || [], status: r.status, notes: r.notes || '', source: r.source, demo: r.demo,
+    vacant: r.vacant, tags: r.tags || [], homestead: (r.tags || []).includes('homestead'), over65: (r.tags || []).includes('over65'), valueEstimated: (r.tags || []).includes('value_est'), status: r.status, notes: r.notes || '', source: r.source, demo: r.demo,
     owners: (r.owners || []).map(o => ({ id: o.id, name: o.name, mailing: o.mailing_address, mailingCity: o.mailing_city, mailingState: o.mailing_state, mailingZip: o.mailing_zip, absentee: o.is_absentee, deceased: o.deceased })),
     contacts: (r.contacts || []).map(c => ({ kind: c.kind, value: c.value, phoneType: c.phone_type, dnc: c.dnc, litigator: c.litigator, confidence: c.confidence, provider: c.provider })),
     foreclosure: f ? { id: f.id, saleDate: f.sale_date, saleWindow: f.sale_time_window, saleLocation: f.sale_location, filingDate: f.filing_date, trustees: f.trustees || [], mortgagee: f.mortgagee, servicer: f.servicer, originalLoan: +f.original_loan_amount || null, dotDate: f.deed_of_trust_date, estBalance: +f.est_loan_balance || null, instrument: f.instrument_number, attorney: f.attorney_firm, outcome: f.outcome } : null,
@@ -331,7 +352,10 @@ async function sbUpsertParcel(p) {
     const { data, error } = await sb.from('parcels').insert(row).select('id').single()
     if (error || !data) return
     p.id = data.id
-    if (p.owners?.length) await sb.from('owners').insert(p.owners.map(o => ({ parcel_id: p.id, name: o.name, mailing_address: o.mailing, mailing_city: o.mailingCity, mailing_state: o.mailingState, mailing_zip: o.mailingZip, is_absentee: !!o.absentee })))
+    if (p.owners?.length) {
+      const { data: os } = await sb.from('owners').insert(p.owners.map(o => ({ parcel_id: p.id, name: o.name, mailing_address: o.mailing, mailing_city: o.mailingCity, mailing_state: o.mailingState, mailing_zip: o.mailingZip, is_absentee: !!o.absentee }))).select('id')
+      ;(os || []).forEach((r, i) => { if (p.owners[i]) p.owners[i].id = r.id })
+    }
     if (p.foreclosure) {
       const f = p.foreclosure
       await sb.from('foreclosures').insert({ parcel_id: p.id, sale_date: f.saleDate, sale_time_window: f.saleWindow, sale_location: f.saleLocation, filing_date: f.filingDate || null, trustees: f.trustees || [], mortgagee: f.mortgagee, servicer: f.servicer, original_loan_amount: f.originalLoan, deed_of_trust_date: f.dotDate || null, est_loan_balance: f.estBalance, instrument_number: f.instrument, attorney_firm: f.attorney })

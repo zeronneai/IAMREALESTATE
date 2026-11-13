@@ -36,6 +36,7 @@ export function importer(el) {
         <p class="muted" style="margin-top:0">${esc(t('i.epcad_hint'))}</p>
         <div class="drop" id="edrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>TXT (~) · CSV</p></div>
         <div class="toolbar" style="margin-top:10px"><a class="btn sm ghost" href="https://epcad.org/OpenGovernment" target="_blank" rel="noopener">epcad.org/OpenGovernment</a><button class="btn sm" data-esample>${esc(t('i.try'))}</button><button class="btn sm gold" id="epapply" disabled>${esc(t('i.epcad_apply'))}</button></div>
+        <div id="esrv"></div>
         <div id="eout"></div>
       </div>
     </div>
@@ -152,38 +153,87 @@ async function approve(x, v) {
     foreclosure: { saleDate: v.sale_date, saleWindow: v.sale_time_window || '', saleLocation: x.fields?.sale_location || '', trustees: list(v.trustees), mortgagee: v.mortgagee, servicer: v.servicer || '', originalLoan: orig, dotDate: v.deed_of_trust_date || null, estBalance: orig ? Math.round(orig * 0.85) : null, filingDate: v.filing_date || null, attorney: v.attorney_or_firm || '', instrument: v.instrument_number || '' },
   }], { tag: 'foreclosure', source: 'notice' })
   const p = findByStreet(address)
-  if (p) { const patch = EP.patchFor(p); if (patch) S.applyEnrichment(p.id, patch) }
+  if (p) { const patch = await EP.patchForAsync(p).catch(() => null); if (patch) S.applyEnrichment(p.id, patch) }
   S.logImport({ kind: 'notice_pdf', fileName: x.file, rowsIn: 1, rowsOk: res.added + res.updated })
   toast(`${t('i.done')}: ${res.added} · ${t('i.updated')}: ${res.updated}`)
 }
 
 // ---------- 03 EPCAD index ----------
+const fmtN = n => Number(n || 0).toLocaleString()
 async function epStatus() {
+  const st = $('#epstat'), ap = $('#epapply'), srv = $('#esrv'); if (!st) return
   const m = await EP.ready().catch(() => null)
-  const st = $('#epstat'), ap = $('#epapply'); if (!st) return
-  st.className = 'r pill ' + (m ? 'ok' : '')
-  st.textContent = m ? `${t('i.epcad_ready')} · ${m.count.toLocaleString()}` : t('i.epcad_none')
-  if (ap) ap.disabled = !m
+  let server = null
+  if (S.MODE === 'supabase') server = await EP.serverStatus().catch(() => null)
+  const onServer = server?.count > 0
+  st.className = 'r pill ' + (onServer || m ? 'ok' : '')
+  st.textContent = onServer ? `${t('i.epcad_server')} · ${fmtN(server.count)}` : m ? `${t('i.epcad_ready')} · ${fmtN(m.count)}` : t('i.epcad_none')
+  if (ap) ap.disabled = !(m || onServer)
+  if (srv && S.MODE === 'supabase') {
+    const pend = EP.pendingUpload(), up = EP.uploadState()
+    srv.innerHTML = server?.error === 'no_table'
+      ? `<div class="alert bad" style="margin-top:10px">${esc(t('i.epcad_no_table'))}</div>`
+      : `<div class="muted" style="font-size:12.5px;margin-top:10px">${esc(t('i.epcad_server'))}: <b>${fmtN(server?.count)}</b> ${esc(t('i.parcels'))}${server?.at ? ` · ${esc(t('i.updated'))} ${esc(new Date(server.at).toLocaleString())}` : ''}</div>
+         ${pend?.length ? `<div class="toolbar" style="margin-top:8px"><button class="btn sm gold" id="epup">${esc(up && up.done && up.done < up.total ? t('i.epcad_resume') : t('i.epcad_upload'))} (${fmtN(pend.length)})</button><button class="btn sm ghost" id="epstop" style="display:none">${esc(t('i.epcad_stop'))}</button></div><div class="up-bar" id="epbar" style="display:none"><span></span></div><div class="muted mono" id="epupt" style="font-size:11.5px"></div>` : ''}`
+    $('#epup')?.addEventListener('click', uploadEpcad)
+    $('#epstop')?.addEventListener('click', () => EP.stopUpload())
+  }
+}
+async function uploadEpcad() {
+  const bar = $('#epbar'), txt = $('#epupt'), btn = $('#epup'), stop = $('#epstop')
+  bar.style.display = 'block'; btn.disabled = true; stop.style.display = ''
+  const t0 = Date.now()
+  try {
+    const r = await EP.uploadToServer(({ done, total }) => {
+      bar.firstElementChild.style.width = `${Math.round((done / total) * 100)}%`
+      const sec = (Date.now() - t0) / 1000
+      txt.textContent = `${fmtN(done)} / ${fmtN(total)} · ${Math.round((done / total) * 100)}%`
+      void sec
+    })
+    toast(r.stopped ? t('i.epcad_paused') : `${t('i.epcad_uploaded')} · ${fmtN(r.done)}`)
+  } catch (e) {
+    console.warn(e)
+    txt.textContent = e.code === 'no_table' ? t('i.epcad_no_table') : `${t('i.epcad_upload_err')} (${fmtN(e.done)}): ${e.message}`
+  }
+  btn.disabled = false; stop.style.display = 'none'
+  epStatus()
 }
 async function epcadFiles(files) {
   const out = $('#eout')
   out.innerHTML = `<div class="alert"><span class="spin"></span> ${esc(t('i.epcad_building'))}…</div>`
   try {
-    const r = await EP.buildFromFiles(files, pg => { out.innerHTML = `<div class="alert"><span class="spin"></span> ${esc(t('i.epcad_building'))} · ${esc(pg.file)} · ${pg.rows.toLocaleString()}</div>` })
-    out.innerHTML = `<div class="alert ok">${r.count.toLocaleString()} ${esc(t('i.parcels'))} · ${r.files.map(f => `${esc(f.name)} (${f.rows.toLocaleString()})`).join(', ')}</div>`
+    const r = await EP.buildFromFiles(files, pg => {
+      if (pg.step === 'finish') { out.innerHTML = `<div class="alert"><span class="spin"></span> ${esc(t('i.epcad_finishing'))}…</div>`; return }
+      out.innerHTML = `<div class="alert"><span class="spin"></span> ${esc(t('i.epcad_building'))} · ${esc(pg.file)}${pg.pct != null ? ` · ${pg.pct}%` : ` · ${fmtN(pg.rows)}`}</div>`
+    })
+    const kinds = r.files.map(f => f.kind).filter(Boolean)
+    const missing = r.kind === 'dump' ? ['owners', 'improvements', 'deeds', 'lands'].filter(k => !kinds.includes(k)) : []
+    out.innerHTML = `<div class="alert ok">${fmtN(r.count)} ${esc(t('i.parcels'))} · ${r.files.map(f => `${esc(f.name)} (${fmtN(f.rows)})`).join(', ')}</div>
+      ${missing.length ? `<div class="alert">${esc(t('i.epcad_missing'))}: ${missing.join(', ')}</div>` : ''}
+      ${r.kind === 'dump' && !r.valuesFilled ? `<div class="alert">${esc(t('i.epcad_no_values'))}</div>` : ''}
+      ${r.skipped?.length ? `<div class="alert">${esc(t('i.epcad_skipped'))}: ${r.skipped.map(esc).join(', ')}</div>` : ''}`
     S.logImport({ kind: 'epcad_index', fileName: files.map(f => f.name).join(', '), rowsIn: r.files.reduce((a, f) => a + f.rows, 0), rowsOk: r.count })
     await epStatus(); applyEpcadAll()
   } catch (e) {
     console.warn(e)
-    if (/no property ID/.test(e.message) && files.length === 1 && /\.csv$/i.test(files[0].name)) { out.innerHTML = ''; return csvFlow(files[0], 'epcad') }
-    out.innerHTML = `<div class="alert bad">${esc(e.message)}</div>`
+    if (e.code === 'unknown_layout' && files.length === 1 && /\.csv$/i.test(files[0].name)) { out.innerHTML = ''; return csvFlow(files[0], 'epcad') }
+    const msg = e.code === 'missing_properties' ? t('i.epcad_need_props') : e.code === 'unknown_layout' ? `${e.file}: ${t('i.epcad_unknown')}` : e.message
+    out.innerHTML = `<div class="alert bad">${esc(msg)}</div>`
   }
 }
-function applyEpcadAll() {
-  let n = 0
-  for (const p of S.parcels()) { const patch = EP.patchFor(p); if (patch && S.applyEnrichment(p.id, patch, { silent: true })) n++ }
+async function applyEpcadAll() {
+  const out = $('#eout')
+  const list = S.parcels().slice()
+  let n = 0, i = 0
+  for (const p of list) {
+    i++
+    if (out && i % 5 === 0) { const el = $('#epprog'); if (el) el.textContent = `${i} / ${list.length}`; else out.insertAdjacentHTML('beforeend', `<div class="muted mono" id="epprog" style="font-size:11.5px">${i} / ${list.length}</div>`) }
+    const patch = await EP.patchForAsync(p).catch(() => null)
+    if (patch && S.applyEnrichment(p.id, patch, { silent: true })) n++
+  }
   S.done()
-  const out = $('#eout'); if (out) out.insertAdjacentHTML('beforeend', `<div class="alert ok">${n} ${esc(t('i.epcad_matched'))}</div>`)
+  $('#epprog')?.remove()
+  if (out) out.insertAdjacentHTML('beforeend', `<div class="alert ok">${n} / ${list.length} ${esc(t('i.epcad_matched'))}</div>`)
   toast(`EPCAD: ${n} ${t('i.epcad_matched')}`)
 }
 
@@ -208,7 +258,7 @@ async function taxFile(file) {
   S.logImport({ kind: 'tax_list', fileName: file.name, rowsIn: rows.length, rowsOk: matched.length })
   $('#taxnew')?.addEventListener('click', async () => {
     const res = await S.importParcels(unmatched.map(({ r }) => ({ address: r.address, zip: '', owners: r.owner ? [{ name: r.owner }] : [], taxes: [{ entity: 'Tax office list', year: r.years || '', amount: r.amount, delinquent: true }], epcadId: undefined })), { tag: 'tax_delinquent', source: 'tax:' + file.name })
-    for (const { r } of unmatched) { const p = findByStreet(r.address); if (p) { const patch = EP.patchFor(p); if (patch) { S.applyEnrichment(p.id, patch, { silent: true }); if (!p.lat && p.zip) Object.assign(p, jitter(p.zip)) } } }
+    for (const { r } of unmatched) { const p = findByStreet(r.address); if (p) { const patch = await EP.patchForAsync(p).catch(() => null); if (patch) { S.applyEnrichment(p.id, patch, { silent: true }); if (!p.lat && p.zip) Object.assign(p, jitter(p.zip)) } } }
     S.done(); toast(`${t('i.done')}: ${res.added}`)
   })
 }

@@ -37,7 +37,7 @@ Sistema interno de adquisiciones: remates (foreclosures), leads, listas en lote,
   * `POST /api/enrich` adaptador de EPCAD. `POST /api/taxes` adaptador de impuestos.
   * `GET /api/cron/refresh` diario (Vercel Cron, ver `vercel.json`): trae avisos y los guarda en `notice_inbox`.
 * Lector sin llave (como el portal de ESC): `src/portal/pdfread.js` saca el texto con pdf.js y rearma los renglones por posición (`src/portal/parse/rows.js`); si una página no tiene texto la dibuja y la lee con OCR (tesseract.js, se descarga de un CDN público la primera vez). Las reglas viven en `src/portal/parse/` (`notice.js`, `statement.js`, `table.js`, `epcad.js`, `address.js`) y son las mismas en el navegador y en la API. Pruebas: `npm run test:parsers` con datos ficticios en `src/portal/fixtures/`.
-* Índice de EPCAD y lista DNC se guardan en IndexedDB del navegador (son grandes). `GET /api/cron/epcad` (semanal) puede armar el índice en el servidor y guardarlo en Supabase Storage.
+* Índice de EPCAD: en producción se guarda en la tabla `epcad_parcels` de Supabase (ver "EPCAD en el servidor" abajo), así todo el equipo enriquece sin cargar archivos. En modo demo se guarda en IndexedDB del navegador. La lista DNC se guarda en IndexedDB.
 * `/api/extract-notice` y `/api/extract-statement` (Claude o Gemini) quedan solo como "Ayuda de IA (opcional)" para PDFs raros.
 * Las llaves viven solo en Vercel. El navegador nunca las ve.
 
@@ -79,7 +79,7 @@ Sistema interno de adquisiciones: remates (foreclosures), leads, listas en lote,
 | Dato | Fuente | Costo / permiso |
 |---|---|---|
 | Avisos de remate (fecha, dirección, deudores, banco, trustees, préstamo) | Notices of Trustee's Sale que se presentan en la Oficina del County Clerk de El Paso 21 días antes de la subasta del primer martes de cada mes. El condado los publica en https://apps.epcountytx.gov/publicrecords/Foreclosures | Registro público y gratis. **Ese sitio tiene un robots.txt que prohíbe el acceso automático a todo el dominio**, así que el robot NO lo raspa. Opciones: a) una persona del equipo baja los PDFs del mes desde esa página y los suelta en Importar (el lector sin llave los lee, aunque vengan en un solo paquete o escaneados); b) pedir por escrito al County Clerk el paquete mensual o un acceso masivo y poner esa URL en `EPCOUNTY_SOURCE_URL`; c) un proveedor de datos con licencia que entregue JSON. |
-| Dueño, dirección postal, ausente, valor, año, metros, última escritura, homestead y mayor de 65 | EPCAD, "Property Search Dataset Downloads" en epcad.org/OpenGovernment (Deeds, Improvements, Lands, Owners, Properties, Rolls, Values; texto separado por "~") | Gratis. Se bajan, se descomprimen y se sueltan juntos en Importar > 03. Las columnas se reconocen por nombre del encabezado; no pudimos abrir el documento de layout desde aquí, así que si algún nombre no se reconoce, avísenos el encabezado y se agrega en `src/portal/parse/epcad.js`. |
+| Dueño, dirección postal, ausente, valor, año, metros, última escritura, homestead y mayor de 65 | EPCAD, "Property Search Dataset Downloads" en epcad.org/OpenGovernment (Deeds, Improvements, Lands, Owners, Properties, Rolls, Values; texto separado por "~") | Gratis. Se bajan los archivos Dump (.txt), se sueltan juntos en Importar > 03 y se dan de alta en el servidor con "Subir al servidor". El formato real (sin encabezado) ya está soportado; ver "EPCAD en el servidor". |
 | Impuestos atrasados | Oficina de impuestos de El Paso (actweb.acttax.com) y listas de venta por impuestos | Público. Botón por propiedad a la búsqueda de la oficina, e importador de listas (PDF o CSV) que une por dirección. Automatizar la consulta por cuenta requiere revisar los términos del sitio o un proveedor (TaxNetUSA). |
 | Gravámenes (HELOC, juicios, mecánicos) | Registros del County Clerk o proveedor de datos | Público, pero requiere búsqueda de títulos o proveedor de pago. |
 | Teléfonos y correos de dueños | Gratis: botones de búsqueda en la ficha + agregar a mano con fuente. Masivo: REISkip (cerca de $0.10 a $0.15 por registro) o BatchData (API) | Los teléfonos vienen de bases privadas; no hay forma legal de generarlos con código. Alternativas sin costo de datos: cartas y postales a la dirección postal (EPCAD) y ruta para tocar puertas. |
@@ -104,3 +104,33 @@ Sistema interno de adquisiciones: remates (foreclosures), leads, listas en lote,
 * Comparables automáticos y oferta sugerida con la regla del 70%.
 * Resultado de la subasta (vendida, pospuesta, cancelada) y seguimiento de la reventa.
 * App móvil para "manejar por la zona" con mapa y fotos.
+
+
+## EPCAD en el servidor
+
+### Una sola vez
+1. Supabase > SQL Editor: correr `supabase/epcad.sql` (crea la tabla `epcad_parcels` con sus índices y permisos). Se puede correr de nuevo sin problema.
+2. Recargar el portal.
+
+### Cada vez que EPCAD publique archivos nuevos (normalmente una vez al año)
+1. En epcad.org/OpenGovernment, sección "Property Search Dataset Downloads", bajar: Properties, Owners, Improvements, Lands, Deeds y Values. Descomprimir.
+2. Portal > Import center > 03: soltar juntos los `.txt` (PropertiesXXXXDump.txt, Owners..., Improvements..., Lands..., DeedsDump.txt, Values...). Properties es obligatorio; los demás suman datos.
+3. Lee los 6 archivos en unos 20 segundos (unos 450 MB en total) y une unas 425,000 propiedades.
+4. Botón "Subir al servidor": sube en lotes de 1,000 con barra de avance. Tarda varios minutos (unos 425 lotes). Si se corta o se pausa, "Continuar subida" sigue donde se quedó (en la misma pestaña). Ocupa alrededor de 150 a 250 MB en la base de Supabase.
+5. "Enriquecer todas las propiedades": busca cada propiedad por número de EPCAD, luego por dirección y, si no hay dirección, por descripción legal (bloque, lote y subdivisión).
+
+### Formato real de los archivos (sin encabezado, separados por "~", columnas desde 0)
+| Archivo | Columnas usadas |
+|---|---|
+| Properties (19) | 1 prop_id, 2 legal ("BLK 61 THE PASEOS AT MISSION RIDGE 4 LOT 17" o "75 CHAPARRAL PARK #19 LOT 1"), 5 tipo (R, MH, P), 8 dirección de la propiedad, 17 acres |
+| Owners (9) | 1 nombre, 3 dirección postal, 5 exenciones (HS, DVHS, DV4, OTHER...), 6 prop_id |
+| Improvements (14) | 3 área construida total, 5 descripción, 8 año de construcción, 9 área, 11 prop_id, 13 código (MA = área principal) |
+| Lands (12) | 3 acres, 4 pies² de terreno, 9 prop_id |
+| Deeds (10) | 1 fecha, 3 tipo de escritura, 4 vendedor, 5 comprador, 8 instrumento, 9 prop_id |
+| Values (14) | 1 a 11 valores, 12 año, 13 prop_id |
+
+### Notas
+* El archivo Values de 2027 viene vacío (EPCAD llena los valores más adelante). Mientras, el portal estima el valor con área construida x $/pie² por código postal, marcado "Est. (pie²)". Los $/pie² se editan en Ajustes. Para valores reales, bajar también el archivo Values del año anterior (2026) y soltarlo junto con los demás.
+* Ausente: el dueño se marca ausente si su dirección postal es un apartado postal o es otra casa u otro código postal. Con exención de homestead nunca se marca ausente.
+* Mayor de 65: los archivos 2027 no traen un código OV65 (aparece agrupado como OTHER), así que ese dato queda vacío.
+* Sin Properties no se puede unir nada: es el archivo que liga la dirección con el número de propiedad.

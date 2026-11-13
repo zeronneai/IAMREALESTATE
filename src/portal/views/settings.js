@@ -4,6 +4,7 @@ import { esc, toast, dropzone, icon } from '../ui.js'
 import * as DNC from '../dnc.js'
 import * as EP from '../epcad.js'
 import { DEFAULT_TEMPLATES, DEFAULT_SENDER } from '../mail.js'
+import { DEFAULT_PSF } from '../parse/epcad.js'
 
 const INTS = [
   ['supabase', 'Supabase (database, login, files)', 'VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY'],
@@ -77,6 +78,11 @@ export async function settingsView(el) {
         <form class="inline-form" data-team><input name="name" placeholder="Name" /><input name="email" type="email" placeholder="email@company.com" required /><select name="role" style="height:34px;border-radius:8px;border:1px solid var(--line);background:var(--ink-2);padding:0 8px"><option>agent</option><option>admin</option><option>viewer</option></select><button class="btn sm">${esc(t('d.add'))}</button></form>
         <p class="muted" style="font-size:12px">With Supabase, invite teammates in Supabase Auth and add them to team_members (see docs/PORTAL_README.md).</p>
       </div>
+      <div class="card fade-in"><h3>${esc(t('s.psf'))}</h3>
+        <p class="muted" style="margin-top:0;font-size:12.5px">${esc(t('s.psf_hint'))}</p>
+        <form data-psf><textarea name="psf" style="min-height:140px;width:100%" class="mono">${esc(Object.entries({ ...DEFAULT_PSF, ...(S.settings().psfByZip || {}) }).map(([z, v]) => `${z}=${v}`).join('\n'))}</textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn gold">${esc(t('s.save'))}</button></div></form>
+      </div>
       ${S.MODE === 'demo' ? `<div class="card fade-in"><button class="btn ghost" data-reset>${esc(t('s.reset_demo'))}</button></div>` : ''}
     </div>
   </div>`
@@ -84,6 +90,12 @@ export async function settingsView(el) {
   form.addEventListener('input', e => { const o = el.querySelector(`[data-o="${e.target.name}"]`); if (o) o.textContent = e.target.value })
   form.onsubmit = async e => { e.preventDefault(); const nw = Object.fromEntries([...new FormData(form)].map(([k, v]) => [k, +v])); await S.saveSettings({ weights: nw }); toast(t('s.saved')) }
   el.querySelector('[data-team]').onsubmit = async e => { e.preventDefault(); const m = Object.fromEntries(new FormData(e.target)); await S.saveSettings({ team: [...team, m] }); toast(t('s.saved')) }
+  el.querySelector('[data-psf]')?.addEventListener('submit', e => {
+    e.preventDefault()
+    const map = {}
+    for (const line of String(new FormData(e.target).get('psf') || '').split(/\n/)) { const m = line.match(/^\s*(\d{5}|default)\s*[=:,]\s*([\d.]+)/i); if (m) map[m[1].toLowerCase()] = +m[2] }
+    S.saveSettings({ psfByZip: map }); toast(t('s.saved'))
+  })
   el.querySelector('[data-reset]')?.addEventListener('click', () => { S.resetDemo(); toast(t('s.saved')) })
   dropzone(el.querySelector('#dncdrop'), async files => { const r = await DNC.importFile(files[0]); toast(`DNC +${r.added.toLocaleString()} · ${r.total.toLocaleString()}`); settingsView(el) }, { multiple: false, accept: '.txt,.csv,text/plain,text/csv' })
   el.querySelector('[data-dncclear]')?.addEventListener('click', async () => { await DNC.clear(); settingsView(el) })

@@ -46,7 +46,7 @@ export function leads(el, mode, params = {}) {
       { key: 'sale', label: t('c.sale'), render: p => `<span class="mono">${esc(date(p.foreclosure.saleDate))}</span> <span class="dim mono" style="font-size:11px">${p._d.daysToSale}d</span>` },
       { key: 'lender', label: t('c.lender'), render: p => `<span style="max-width:180px;display:inline-block;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">${esc(p.foreclosure.mortgagee || '')}</span>` },
     ] : [{ key: 'tags', label: t('c.tags'), render: p => (p.tags || []).filter(x => x !== 'high_equity').slice(0, 3).map(tagPill).join(' ') }]),
-    { key: 'value', label: t('c.value'), num: true, render: p => money(p.marketValue) },
+    { key: 'value', label: t('c.value'), num: true, render: p => money(p.marketValue) + (p.valueEstimated && p.marketValue ? '<small class="dim" title="Est. (sqft)">*</small>' : '') },
     { key: 'balance', label: t('c.balance'), num: true, render: p => money(p._d.mortgageBal) },
     { key: 'equity', label: t('c.equity'), num: true, render: p => `${p._d.equityPct}%<span class="eq-bar"><i style="width:${Math.max(0, Math.min(100, p._d.equityPct))}%;background:${p._d.equityPct < 15 ? 'var(--bad)' : 'var(--ok)'}"></i></span>` },
     { key: 'taxes', label: t('c.taxes'), num: true, render: p => p._d.taxDue ? `<span style="color:var(--warn)">${money(p._d.taxDue)}</span>` : '<span class="dim">0</span>' },
