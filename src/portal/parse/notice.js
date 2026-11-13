@@ -247,7 +247,7 @@ function parseNoticeRules(raw) {
   c.instrument_number = f.instrument_number ? 'high' : 'low'
   const volPage = flat.match(/volume\s+(\d+)[,\s]+page\s+(\d+)/i)
   f.volume_page = volPage ? `${volPage[1]}/${volPage[2]}` : null
-  f.original_loan_amount = parseMoney(first(flat, [/original\s+principal(?:\s+amount)?(?:\s+of)?\s*:?\s*[—-]?\s*(\$\s*[\d,]+(?:\.\d{2})?)/i, /in\s+the\s+(?:original\s+)?(?:principal\s+)?amount\s+of\s+(\$\s*[\d,]+(?:\.\d{2})?)/i, /original\s+(?:loan\s+)?amount\s*:?\s*(\$\s*[\d,]+(?:\.\d{2})?)/i]))
+  f.original_loan_amount = parseMoney(first(flat, [/original\s+principal(?:\s+amount)?(?:\s+of)?[^$\d]{0,8}(\$?\s*\d{1,3}(?:,\d{3})+(?:\.\d{2})?)/i, /in\s+the\s+(?:original\s+)?(?:principal\s+)?amount\s+of\s+(\$\s*[\d,]+(?:\.\d{2})?)/i, /original\s+(?:loan\s+)?amount\s*:?\s*(\$\s*[\d,]+(?:\.\d{2})?)/i]))
   c.original_loan_amount = conf(f.original_loan_amount, true)
 
   // ---- County, filing date, firm, file number
