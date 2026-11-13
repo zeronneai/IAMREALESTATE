@@ -257,6 +257,7 @@ export async function uploadValuesCsv(file, onProgress) {
     if (batch.length >= 500) await flush()
   }
   await flush()
-  await S.saveSettings({ epcad_values: { count: done, at: now, file: file.name } }).catch(() => {})
+  const prev = S.settings()?.epcad_meta
+  await S.saveSettings({ epcad_values: { count: done, at: now, file: file.name }, epcad_meta: { count: Math.max(prev?.count || 0, done), at: now } }).catch(() => {})
   return { done }
 }
