@@ -119,6 +119,9 @@ const BATCH = 1000
 export function uploadState() { try { return JSON.parse(localStorage.getItem(UP_KEY) || 'null') } catch { return null } }
 const setUploadState = v => { try { localStorage.setItem(UP_KEY, JSON.stringify(v)) } catch {} }
 let stopFlag = false
+// Postgres rejects NUL and other control characters inside text (EPCAD deeds contain some): strip them.
+const cleanStr = v => typeof v === 'string' ? (v.replace(/[\u0000-\u001f]+/g, ' ').trim() || null) : v
+const sanitize = r => { const o = {}; for (const [k, v] of Object.entries(r)) o[k] = Array.isArray(v) ? v.map(cleanStr).filter(Boolean) : cleanStr(v); return o }
 export const stopUpload = () => { stopFlag = true }
 
 // Batched upserts with retries. Resumes from the last finished batch of the same build.
@@ -132,7 +135,7 @@ export async function uploadToServer(onProgress) {
   for (let i = start; i < list.length; i += BATCH) {
     if (stopFlag) return { done: i, total: list.length, stopped: true }
     const now = new Date().toISOString()
-    const rows = list.slice(i, i + BATCH).map(({ legal_key, ...r }) => ({ ...r, updated_at: now }))
+    const rows = list.slice(i, i + BATCH).map(({ legal_key, ...r }) => ({ ...sanitize(r), updated_at: now }))
     let err = null
     for (let a = 0; a < 4; a++) {
       const { error } = await sb.from('epcad_parcels').upsert(rows, { onConflict: 'prop_id' })
