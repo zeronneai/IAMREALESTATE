@@ -170,7 +170,12 @@ async function epStatus() {
   st.textContent = onServer ? `${t('i.epcad_server')} · ${fmtN(server.count)}` : m ? `${t('i.epcad_ready')} · ${fmtN(m.count)}` : t('i.epcad_none')
   if (ap) ap.disabled = !(m || onServer)
   if (srv && S.MODE === 'supabase') {
-    const pend = EP.pendingUpload(), up = EP.uploadState()
+    let pend = EP.pendingUpload(); const up = EP.uploadState()
+    // Upload already finished for these files: hide the button and keep the real total for the team.
+    if (up?.finishedAt && pend?.length && up.total === pend.length) {
+      pend = null
+      if (!S.settings()?.epcad_meta) { S.saveSettings({ epcad_meta: { count: up.total, at: up.finishedAt } }).then(() => epStatus()).catch(() => {}) }
+    }
     srv.innerHTML = server?.error === 'no_table'
       ? `<div class="alert bad" style="margin-top:10px">${esc(t('i.epcad_no_table'))}</div>`
       : `<div class="muted" style="font-size:12.5px;margin-top:10px">${esc(t('i.epcad_server'))}: <b>${fmtN(server?.count)}</b> ${esc(t('i.parcels'))}${server?.at ? ` · ${esc(t('i.updated'))} ${esc(new Date(server.at).toLocaleString())}` : ''}</div>

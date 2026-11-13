@@ -153,13 +153,19 @@ export async function uploadToServer(onProgress) {
     setUploadState({ builtAt, total: list.length, done })
     onProgress?.({ done, total: list.length })
   }
-  setUploadState({ builtAt, total: list.length, done: list.length, finishedAt: new Date().toISOString() })
+  const finishedAt = new Date().toISOString()
+  setUploadState({ builtAt, total: list.length, done: list.length, finishedAt })
+  // Save the real total so every teammate sees it (counting 400k rows on the free plan times out).
+  await S.saveSettings({ epcad_meta: { count: list.length, at: finishedAt } }).catch(() => {})
   return { done: list.length, total: list.length }
 }
 export async function serverStatus() {
   const sb = S.client(); if (!sb) return null
-  const { count, error } = await sb.from('epcad_parcels').select('prop_id', { count: 'estimated', head: true })
+  const { count: est, error } = await sb.from('epcad_parcels').select('prop_id', { count: 'estimated', head: true })
   if (error) return { error: /does not exist|schema cache/i.test(error.message || '') ? 'no_table' : error.message }
+  const meta = S.settings()?.epcad_meta
+  if (meta?.count) return { count: meta.count, at: meta.at, done: true }
+  const count = est
   if (!count) return { count: 0 }
   const { data } = await sb.from('epcad_parcels').select('updated_at').order('updated_at', { ascending: false }).limit(1)
   return { count, at: data?.[0]?.updated_at || null }
