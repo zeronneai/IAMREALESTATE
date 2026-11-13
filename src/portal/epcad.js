@@ -198,3 +198,65 @@ export function patchFor(p) {
 }
 export function useList(list, at) { mem = { kind: 'legacy', maps: lookupMaps(list), count: list.length, at: at || new Date().toISOString() } }
 export const hasLocal = () => !!mem
+
+// ---------- appraisal roll values (EPCAD "Appraisal Roll" saved as CSV) ----------
+// The yearly Dump files can come with empty values (the new year is not appraised yet). The Appraisal Roll
+// (Excel from EPCAD, saved as CSV, or the compact values CSV) has prop_id, market_val, owner_tax_yr and
+// ExemptionCodeList. We only update those columns on the server so the rest of the index stays as it is.
+export const isValuesCsv = head => /(^|[,;\t])"?prop_id"?([,;\t]|$)/i.test(head) && /market_val/i.test(head)
+function csvCells(line, d) {
+  const out = []; let cur = '', q = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++ } else q = false } else cur += ch }
+    else if (ch === '"') q = true
+    else if (ch === d) { out.push(cur); cur = '' }
+    else cur += ch
+  }
+  out.push(cur); return out.map(s => s.trim())
+}
+export async function uploadValuesCsv(file, onProgress) {
+  const sb = S.client(); if (!sb) { const e = new Error('no_server'); e.code = 'no_server'; throw e }
+  const head = await firstLine(file)
+  const d = head.includes('\t') ? '\t' : head.split(';').length > head.split(',').length ? ';' : ','
+  const H = csvCells(head.replace(/^﻿/, ''), d).map(h => h.toLowerCase())
+  const col = n => H.indexOf(n)
+  const iId = col('prop_id'), iMv = col('market_val'), iAp = col('appraised_val'), iYr = col('owner_tax_yr'), iEx = H.findIndex(h => h === 'exemptioncodelist')
+  if (iId < 0 || iMv < 0) { const e = new Error('unknown_layout'); e.code = 'unknown_layout'; e.file = file.name; throw e }
+  const num = v => { const n = Number(String(v ?? '').replace(/[$,\s]/g, '')); return Number.isFinite(n) && n > 0 ? n : null }
+  let batch = [], done = 0, first = true, lastPct = -1
+  const seen = new Set()
+  const flush = async () => {
+    if (!batch.length) return
+    const rows = batch; batch = []
+    let err = null
+    for (let a = 0; a < 5; a++) {
+      const size = a < 2 ? rows.length : Math.max(50, Math.ceil(rows.length / (2 ** (a - 1))))
+      err = null
+      for (let j = 0; j < rows.length && !err; j += size) {
+        const { error } = await sb.from('epcad_parcels').upsert(rows.slice(j, j + size), { onConflict: 'prop_id', returning: 'minimal' })
+        if (error) err = error
+      }
+      if (!err) break
+      await new Promise(r => setTimeout(r, 1000 * (a + 1)))
+    }
+    if (err) { const e = new Error(err.message || 'upload_failed'); e.done = done; throw e }
+    done += rows.length
+  }
+  const now = new Date().toISOString()
+  for await (const line of lines(file, b => { const pct = Math.floor((b / file.size) * 100); if (pct !== lastPct) { lastPct = pct; onProgress?.({ pct, done }) } })) {
+    if (first) { first = false; continue }
+    if (!line.trim()) continue
+    const c = csvCells(line, d)
+    const id = String(c[iId] || '').replace(/\.0+$/, '').trim()
+    if (!/^\d+$/.test(id) || seen.has(id)) continue
+    seen.add(id)
+    const mv = num(c[iMv]) ?? (iAp >= 0 ? num(c[iAp]) : null)
+    const ex = iEx >= 0 ? String(c[iEx] || '').toUpperCase() : ''
+    batch.push({ prop_id: id, market_value: mv, tax_year: iYr >= 0 ? (Number(c[iYr]) || null) : null, over65: /\bOV65S?\b/.test(ex), updated_at: now })
+    if (batch.length >= 500) await flush()
+  }
+  await flush()
+  await S.saveSettings({ epcad_values: { count: done, at: now, file: file.name } }).catch(() => {})
+  return { done }
+}

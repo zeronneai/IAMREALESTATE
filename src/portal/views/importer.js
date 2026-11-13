@@ -205,6 +205,25 @@ async function uploadEpcad() {
 }
 async function epcadFiles(files) {
   const out = $('#eout')
+  // An Appraisal Roll / values CSV only updates market values on the server index.
+  const heads = await Promise.all(files.map(f => f.slice(0, 4096).text().then(t => t.split('\n')[0] || '')))
+  const valFiles = files.filter((f, i) => EP.isValuesCsv(heads[i]))
+  if (valFiles.length) {
+    files = files.filter(f => !valFiles.includes(f))
+    for (const f of valFiles) {
+      out.innerHTML = `<div class="alert"><span class="spin"></span> ${esc(t('i.epcad_values_up'))} · ${esc(f.name)}</div>`
+      try {
+        const r = await EP.uploadValuesCsv(f, pg => { out.innerHTML = `<div class="alert"><span class="spin"></span> ${esc(t('i.epcad_values_up'))} · ${esc(f.name)} · ${pg.pct}% · ${fmtN(pg.done)}</div>` })
+        out.innerHTML = `<div class="alert ok">${esc(t('i.epcad_values_done'))}: ${fmtN(r.done)} · ${esc(f.name)}</div>`
+        S.logImport({ kind: 'epcad_values', fileName: f.name, rowsIn: r.done, rowsOk: r.done })
+        await epStatus(); await applyEpcadAll()
+      } catch (e) {
+        console.warn(e)
+        out.innerHTML = `<div class="alert bad">${esc(e.code === 'no_server' ? t('i.epcad_values_server') : `${t('i.epcad_upload_err')} (${fmtN(e.done || 0)}): ${e.message}`)}</div>`
+      }
+    }
+    if (!files.length) return
+  }
   out.innerHTML = `<div class="alert"><span class="spin"></span> ${esc(t('i.epcad_building'))}…</div>`
   try {
     const r = await EP.buildFromFiles(files, pg => {
