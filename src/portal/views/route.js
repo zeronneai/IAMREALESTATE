@@ -63,7 +63,7 @@ export async function routeView(el) {
 
 async function drawMap(box, stops) {
   if (!L) { const [mod] = await Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')]); L = mod.default || mod }
-  const map = L.map(box, { scrollWheelZoom: false }).setView([OFFICE.lat, OFFICE.lng], 12)
+  const map = L.map(box, { scrollWheelZoom: true, wheelPxPerZoomLevel: 90 }).setView([OFFICE.lat, OFFICE.lng], 12)
   L.tileLayer(import.meta.env.VITE_MAP_TILES_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: import.meta.env.VITE_MAP_TILES_URL ? '' : 'dark-tiles', attribution: '&copy; OpenStreetMap contributors' }).addTo(map)
   const pin = (n, cls = '') => L.divIcon({ className: '', html: `<div class="num-pin ${cls}">${n}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] })
   const pts = [[OFFICE.lat, OFFICE.lng], ...stops.map(s => [s.lat, s.lng])]

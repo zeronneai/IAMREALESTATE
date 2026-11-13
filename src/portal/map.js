@@ -12,7 +12,7 @@ async function lib() {
 export async function mountMap(el, parcels, { onOpen, zoom = 11 } = {}) {
   const L = await lib()
   if (el._map) { el._map.remove(); el._map = null }
-  const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([31.80, -106.40], zoom)
+  const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: true, wheelPxPerZoomLevel: 90 }).setView([31.80, -106.40], zoom)
   // OpenStreetMap standard tiles, darkened with a CSS filter (.dark-tiles). For heavy production use,
   // switch to a keyed provider (Mapbox, MapTiler, Stadia) via VITE_MAP_TILES_URL.
   L.tileLayer(import.meta.env.VITE_MAP_TILES_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
