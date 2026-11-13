@@ -107,6 +107,7 @@ function splitNames(v) {
   if (!v) return []
   return v.replace(/\b(?:AND|&)\s+(?:HIS|HER)\s+(?:WIFE|HUSBAND|SPOUSE)\b/gi, '')
     .replace(/,?\s*\b(?:A\s+)?(?:SINGLE|MARRIED|UNMARRIED)\s+(?:MAN|WOMAN|PERSON)\b/gi, '')
+    .replace(/,?\s*\b(?:A|AN)\s+SOLE\s+OWNERSHIP\b|,?\s*\bAN?\s+UNMARRIED\s+(?:MAN|WOMAN|PERSON)\b/gi, '')
     .replace(/,?\s*\b(?:HUSBAND\s+AND\s+WIFE|AS\s+HIS\s+SOLE\s+AND\s+SEPARATE\s+PROPERTY|AS\s+HER\s+SOLE\s+AND\s+SEPARATE\s+PROPERTY)\b/gi, '')
     .split(/\s*(?:;|\bAND\b|&|,(?=\s*[A-Z][A-Z]+\s+[A-Z]))\s*/i)
     .map(s => s.replace(/[.,]+$/, '').trim()).filter(s => s.length > 3 && !/^(?:N\/A|NONE)$/i.test(s))
@@ -115,12 +116,171 @@ export function splitTrustees(v) {
   if (!v) return []
   return v.split(/\s*(?:,|;|\n|\bOR\b|\bAND\b|&)\s*/i)
     .map(s => s.replace(/^(?:SUBSTITUTE\s+TRUSTEES?|ANY\s+OF\s+THEM)\s*/i, '').trim())
-    .filter(s => /^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3}$/.test(s) && !/(?:LLC|LLP|P\.?C\.?|COUNTY|TEXAS|SUITE|DRIVE|STREET)$/i.test(s) && !/\b(?:LAW|GROUP|FIRM|ATTORNEYS?|BANK|MORTGAGE|SERVICING|ASSOCIATES|CORP|INC|COMPANY|LENDING|TRUST|ADDRESS|NOTICE|SALE)\b/i.test(s))
+    .filter(s => /^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3}$/.test(s) && !/(?:LLC|LLP|P\.?C\.?|COUNTY|TEXAS|SUITE|DRIVE|STREET)$/i.test(s) && !/\b(?:LAW|GROUP|FIRM|ATTORNEYS?|BANK|MORTGAGE|SERVICING|ASSOCIATES|CORP|INC|COMPANY|LENDING|TRUST|ADDRESS|NOTICE|SALE|APPOINTMENT|INSTRUMENT|PROPERTY|IDENTIFIED|AUTHORIZED|AGENT|SELL|SIGNING|THE)\b/i.test(s))
     .slice(0, 12)
 }
 const conf = (v, ok) => (v == null || v === '' || (Array.isArray(v) && !v.length) ? 'low' : ok ? 'high' : 'med')
 
-export function parseNotice(raw) {
+// El Paso County Clerk adds a cover page ("THIS PAGE IS PART OF THE INSTRUMENT", receipt, fees). Keep its
+// "Recorded On" date (the filing date) and drop the page so its masked instrument number is never used.
+export function stripCoverPages(raw) {
+  const pages = String(raw || '').split('\f')
+  let filed = null
+  const keep = pages.filter(pg => {
+    const isCover = /PART OF THE INSTRUMENT|File Information|Receipt Number|Number of Pages/i.test(pg) && !/(?:date|place)\s+of\s+sale|trustee'?s?\s+sale|foreclosure\s+sale/i.test(pg)
+    if (isCover) { const m = pg.match(/Recorded\s+On\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i); if (m && !filed) filed = parseDate(m[1]) }
+    return !isCover
+  })
+  return { text: keep.join('\n'), filed }
+}
+
+const DATE_SRC = String.raw`(?:\d{1,2}\/\d{1,2}\/\d{2,4}|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEPT?|OCT|NOV|DEC)[A-Z]*\.?\s+\d{1,2}(?:ST|ND|RD|TH)?,?\s+\d{4}|\d{1,2}(?:ST|ND|RD|TH)?\s+DAY\s+OF\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEPT?|OCT|NOV|DEC)[A-Z]*,?\s+\d{4})`
+const first = (str, res) => { for (const r of res) { const m = str.match(r); if (m && m[1] && m[1].trim()) return m[1].trim() } return null }
+const tidy = v => v ? v.replace(/[\s:;.|,'"—-]+$/g, '').replace(/^[\s:;.|,—-]+/, '').replace(/\s+/g, ' ').trim() || null : null
+const okCompany = v => !!v && /^[A-Z0-9]/.test(v) && !/^(?:if|is|for|the undersigned|of the|as|and|in|to)\b/i.test(v) && v.length >= 4
+const ELP = s => s && /^EL\.?\s*PASO$/i.test(s.trim()) ? 'EL PASO' : s
+
+function parseNoticeRules(raw) {
+  const cover = stripCoverPages(String(raw || '').replace(/\r/g, ''))
+  const text = cover.text.replace(/[ \t]+/g, ' ').replace(/[’‘]/g, "'").replace(/[“”]/g, '"')
+  const flat = text.replace(/\s+/g, ' ')
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const f = {}, c = {}
+
+  // ---- Sale date: labeled first, but it must be a "first Tuesday"; else any first-Tuesday date in the notice
+  const labeled = first(flat, [
+    new RegExp(String.raw`date\s+of\s+(?:the\s+)?sale\s*:?\s*(?:[A-Z]+day,?\s+(?:the\s+)?)?(` + DATE_SRC + ')', 'i'),
+    new RegExp(String.raw`sale\s+information\s*:?\s*(?:[A-Z]+day,?\s+(?:the\s+)?)?(` + DATE_SRC + ')', 'i'),
+    new RegExp(String.raw`place\s+of\s+sale\.?\s*date\s*:\s*(` + DATE_SRC + ')', 'i'),
+    new RegExp(String.raw`(?:^|\s)date\s*:\s*(` + DATE_SRC + ')', 'i'),
+  ])
+  const allDates = [...flat.matchAll(new RegExp(DATE_SRC, 'gi'))].map(m => parseDate(m[0])).filter(Boolean)
+  const tuesdays = allDates.filter(d => isFirstTuesday(d) && d >= '2020-01-01')
+  let sd = parseDate(labeled), sdC = 'low'
+  if (sd && isFirstTuesday(sd)) sdC = 'high'
+  else if (tuesdays.length) { sd = tuesdays[0]; sdC = 'high' }
+  else if (sd) sdC = 'med'
+  f.sale_date = sd || null; c.sale_date = sd ? sdC : 'low'
+
+  // ---- Time window
+  const tm = flat.match(/(?:earliest\s+time[^.]{0,40}?|time\s+of\s+sale\s*:?[^0-9]{0,10}|time\s*:\s*[^0-9]{0,60}?|\bat\s+)(\d{1,2}(?::\d{2})?\s*[AP]\.?\s?M\.?)/i) || flat.match(/(\d{1,2}:\d{2}\s*[AP]\.?\s?M\.?)/i)
+  if (tm) { const t0 = up(tm[1]); f.sale_time_window = /three\s*\(?3?\)?\s*hours/i.test(flat) ? `${t0} to ${plus3(t0)}` : t0 } else f.sale_time_window = null
+  c.sale_time_window = f.sale_time_window ? 'high' : 'low'
+
+  // ---- Place
+  if (/coliseum/i.test(flat)) f.sale_location = 'El Paso County Coliseum, 4100 E. Paisano Dr, El Paso, TX 79905'
+  else f.sale_location = tidy(first(flat, [/place\s+of\s+sale(?:\s+of\s+property)?\s*:\s*(.{10,160}?)(?:,?\s+or\s+(?:if|as)|\.\s)/i, /\bplace\s*:\s*(.{10,160}?)(?:,?\s+or\s+(?:if|as)|\.\s)/i, /at\s+the\s+(El Paso County Courthouse[^.;]{0,120})/i]))
+  c.sale_location = f.sale_location ? 'high' : 'low'
+
+  // ---- Property address: labeled line, else a header line that is only an address
+  let addr = null, addrC = 'low'
+  const lineAddr = l => { const m = l.match(ADDR_RE); return m && !/COLISEUM|PAISANO|SUITE|BOISE|DALLAS|IRVINE|GREENVILLE|ALPHARETTA|HUNTINGTON|FISHERS|VIRGINIA BEACH/i.test(l) ? m : null }
+  for (let i = 0; i < lines.length && !addr; i++) {
+    if (/property\s+address|mailing\s+address|commonly\s+known\s+as|reported\s+address|street\s+address|physical\s+address/i.test(lines[i])) {
+      const m = lineAddr(lines[i].replace(/^.*?(?:address|known\s+as)[^:]*:?\s*/i, '')) || lineAddr(lines[i] + ' ' + (lines[i + 1] || ''))
+      if (m) { addr = m; addrC = 'high' }
+    }
+  }
+  if (!addr) for (const l of lines.slice(0, 15)) { const m = lineAddr(l); if (m) { addr = m; addrC = 'high'; break } }
+  if (!addr) for (const l of lines) { const m = lineAddr(l); if (m) { addr = m; addrC = 'med'; break } }
+  if (addr) { f.property_address = clean(addr[1]).toUpperCase().replace(/^\d{1,2}-\d+\s+/, ''); f.city = ELP(addr[2].trim().toUpperCase()); f.zip = addr[3] }
+  else { f.property_address = null; f.city = null; f.zip = null }
+  c.property_address = addrC; c.zip = conf(f.zip, /^79\d{3}|^88\d{3}/.test(f.zip || ''))
+
+  // ---- Legal description
+  const lg = flat.match(/((?:ALL\s+OF\s+)?LOTS?\s+\d+[A-Z]?\b[\s\S]{10,420}?(?:TEXAS|RECORDS|\d{6,}|THEREOF)\.)(?=\s|$)/i) || flat.match(/((?:ALL\s+OF\s+)?LOTS?\s+\d+[A-Z]?,?\s+(?:IN\s+)?BLOCK\s+\d+[^;]{10,300})/i) || flat.match(/((?:TRACT|PARCEL)\s+[\w.-]+[^;]{10,300}?(?:TEXAS|SURVEY)[^.]{0,80}\.)/i)
+  f.legal_description = lg ? lg[1].replace(/\s+/g, ' ').slice(0, 420) : null
+  c.legal_description = conf(f.legal_description, /\bLOT\b/i.test(f.legal_description || '') && /\bBLOCK\b/i.test(f.legal_description || ''))
+
+  // ---- Owners (grantors)
+  let gl = null
+  for (let i = 0; i < lines.length && !gl; i++) {
+    const m = lines[i].match(/(?:grantor\(?s?\)?|mortgagor\(?s?\)?(?:\s*\/\s*grantor\(?s?\)?)?|borrower\(?s?\)?)\s*:\s*(.+)$/i)
+    if (m) { gl = m[1]; const nx = lines[i + 1] || ''; if (/^[A-Z][A-Z .,'-]{2,40}$/.test(nx) && !/:/.test(nx) && gl.split(/\s+/).length < 3) gl += ' ' + nx }
+  }
+  const ex = first(flat, [/executed\s+by\s+([A-Z][A-Z .,'-]{3,90}?)(?:,\s+(?=[a-z])|,?\s+(?:secures|and\s+payable|as\s+grantor|to\s+secure|to\s+the\s+order))/])
+  let grantors = splitNames(gl)
+  const exNames = splitNames(ex)
+  if ((!grantors.length || grantors.every(n => n.split(/\s+/).length < 2)) && exNames.length) grantors = exNames
+  f.grantors = grantors; c.grantors = conf(grantors, grantors.some(n => n.split(/\s+/).length >= 2))
+
+  // ---- Lender, servicer, original mortgagee
+  const lineVal = re => { for (const l of lines) { const m = l.match(re); if (m && okCompany(tidy(m[1]))) return tidy(m[1].split(/\s+\|\s+|\s{2,}|\s+Mortgage\s+Servicer'?s?\s+Address/i)[0]) } return null }
+  f.mortgagee = trimCo(lineVal(/current\s+(?:beneficiary\s*\/\s*)?mortgagee\s*:\s*(.+)$/i) || lineVal(/current\s+beneficiary\s*:\s*(.+)$/i)
+    || first(flat, [/\.\s+([A-Z][A-Za-z0-9 ,.&'-]{3,80}?),\s+whose\s+address\s+is\s+.{5,180}?,\s+is\s+the\s+current\s+mortgagee/, /([A-Z][A-Za-z0-9 .&'-]{3,60}?(?:,\s*(?:LLC|INC\.?|N\.A\.|CORP\.?))?)\s+is\s+the\s+current\s+mortgagee/]))
+  c.mortgagee = f.mortgagee ? 'high' : 'low'
+  f.servicer = trimCo(lineVal(/mortgage\s+servicer\s*:\s*(.+)$/i)
+    || first(flat, [/(?:\band\s+|\.\s+)(?!Note\b)([A-Z][A-Za-z0-9.&'-]+(?:\s+[A-Z][A-Za-z0-9.&'-]+){0,4}(?:,\s*(?:LLC|INC\.?|N\.A\.))?)\s+is\s+the\s+current\s+mortgage\s+servicer/, /([A-Z][A-Za-z0-9 ,.&'-]{3,60}?)\s+as\s+Mortgage\s+Servicer/]))
+  if (f.servicer && !okCompany(f.servicer)) f.servicer = null
+  c.servicer = f.servicer ? 'high' : 'low'
+  if (!f.mortgagee && f.servicer) { f.mortgagee = f.servicer; c.mortgagee = 'med' }
+  f.original_mortgagee = trimCo(lineVal(/original\s+(?:beneficiary\s*\/\s*)?mortgagee\s*:\s*(.+)$/i) || tidy(first(flat, [/original\s+mortgagee\s*:\s*(.{5,160}?)(?:,?\s+its\s+successors|\s+Original\s+Principal|\s+Current)/i])))
+
+  // ---- Substitute trustees (people or companies)
+  const tsrc = first(flat, [
+    /substitute\s+trustee\(?s?\)?\s*:\s*(.{5,400}?)(?:,?\s+any\s+to\s+act|\s+substitute\s+trustee\s+address|\s+c\/o\s)/i,
+    /appoints\s+in\s+their\s+stead\s*:?\s*(.{5,400}?)(?:,?\s+or\s+any\s+one\s+of\s+them|\s+c\/o\s)/i,
+    /removed\s+and\s+(.{5,400}?),?\s+any\s+to\s+act/i,
+    /has\s+requested\s+(.{5,400}?)\s+to\s+sell\s+the\s+property/i,
+    /appoint(?:s|ed)?\s+(.{5,300}?)\s+as\s+substitute\s+trustees?/i,
+  ])
+  f.trustees = splitTrusteesAny(tsrc); c.trustees = conf(f.trustees, !!tsrc)
+
+  // ---- Deed of trust date, instrument number, amount
+  f.deed_of_trust_date = parseDate(first(flat, [
+    new RegExp(String.raw`deed\s+of\s+trust\s+dated\s+(` + DATE_SRC + ')', 'i'),
+    new RegExp(String.raw`deed\s+of\s+trust\s+date\s*:?\s*(` + DATE_SRC + ')', 'i'),
+    new RegExp(String.raw`deed\s+of\s+trust\s+in[^:]{0,15}:\s*date\s*:\s*(` + DATE_SRC + ')', 'i'),
+    new RegExp(String.raw`security\s+instrument\s+dated\s+(` + DATE_SRC + ')', 'i'),
+  ]))
+  c.deed_of_trust_date = conf(f.deed_of_trust_date, true)
+  let best = null
+  for (const m of flat.matchAll(/\b((?:19|20)\d{2}[-\s]?\d{7})\b/g)) {
+    const num = m[1].replace(/[-\s]/g, ''); if (/^0+\d?$/.test(num)) continue
+    const before = flat.slice(Math.max(0, m.index - 170), m.index)
+    let sc = 0
+    if (/deed\s+of\s+trust|security\s+instrument|recording\s+information|instrument\s+to\s+be\s+foreclosed|recorded\s+(?:on|in|under)|instrument\s+(?:no|number|#)/i.test(before)) sc += 3
+    if (/plat|according\s+to\s+the\s+map|thereof|correction/i.test(before.slice(-120))) sc -= 5
+    if (!best || sc > best.sc) best = { num, sc }
+  }
+  f.instrument_number = best && best.sc > 0 ? best.num : null
+  c.instrument_number = f.instrument_number ? 'high' : 'low'
+  const volPage = flat.match(/volume\s+(\d+)[,\s]+page\s+(\d+)/i)
+  f.volume_page = volPage ? `${volPage[1]}/${volPage[2]}` : null
+  f.original_loan_amount = parseMoney(first(flat, [/original\s+principal(?:\s+amount)?(?:\s+of)?\s*:?\s*[—-]?\s*(\$\s*[\d,]+(?:\.\d{2})?)/i, /in\s+the\s+(?:original\s+)?(?:principal\s+)?amount\s+of\s+(\$\s*[\d,]+(?:\.\d{2})?)/i, /original\s+(?:loan\s+)?amount\s*:?\s*(\$\s*[\d,]+(?:\.\d{2})?)/i]))
+  c.original_loan_amount = conf(f.original_loan_amount, true)
+
+  // ---- County, filing date, firm, file number
+  f.county = tidy((flat.match(/property\s+county\s*:?\s*[—-]?\s*([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?)/i) || [])[1]?.replace(/\s+(Volume|Property|Recorded).*$/i, '')) ?.toUpperCase() || (/el\s+paso/i.test(flat) ? 'EL PASO' : null)
+  c.county = f.county ? 'high' : 'low'
+  f.filing_date = cover.filed
+  c.filing_date = conf(f.filing_date, true)
+  let firm = null
+  for (const line of text.split('\n').reverse()) { const fm = line.trim().match(FIRMS_RE); if (fm) { firm = fm[1] || fm[2]; break } }
+  f.attorney_or_firm = firm ? clean(firm) : null
+  c.attorney_or_firm = conf(f.attorney_or_firm, true)
+  f.ts_number = first(flat, [/T\.?\s?S\.?\s*(?:#|No\.?|Number)\s*:?\s*([A-Z0-9][A-Z0-9-]{4,})/i]) || (lines[0] && (lines[0].match(/^(\d{2}-\d{4,8})\b/) || [])[1]) || null
+
+  const keyFields = ['sale_date', 'property_address', 'grantors', 'mortgagee', 'trustees', 'legal_description']
+  const score = Math.round(keyFields.reduce((a, k) => a + (c[k] === 'high' ? 1 : c[k] === 'med' ? 0.6 : 0), 0) / keyFields.length * 100)
+  return { fields: f, confidence: c, score }
+}
+// Substitute trustees today are often companies ("Auction.com, LLC"), so keep both people and companies.
+export function splitTrusteesAny(v) {
+  if (!v) return []
+  const raw = v.replace(/\s+/g, ' ').split(/\s*(?:;|,|\bOR\b|\bAND\b|&)\s*/i).map(s => s.trim()).filter(Boolean)
+  const out = []
+  for (const s of raw) {
+    if (/^(?:LLC|L\.L\.C\.|INC\.?|LP|L\.P\.|PLLC|P\.C\.|CORP\.?)$/i.test(s) && out.length) { out[out.length - 1] += ', ' + s; continue }
+    const t = s.replace(/^(?:SUBSTITUTE\s+TRUSTEES?|ANY\s+OF\s+THEM|AS\s+SUBSTITUTE\s+TRUSTEE)\s*/i, '').replace(/\s+whose\s+address\s+is.*$/i, '').trim()
+    if (!t || /\d/.test(t) || t.split(/\s+/).length > 6 || t.length < 4) continue
+    if (/^(?:SUITE|C\/O|ANY TO ACT|HUNTINGTON|DALLAS|TEXAS|CALIFORNIA|IRVINE)\b/i.test(t)) continue
+    if (!/^[A-Z]/.test(t)) continue
+    out.push(t)
+  }
+  return [...new Set(out)].slice(0, 14)
+}
+function parseNoticeLegacy(raw) {
   const text = String(raw || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ').replace(/[’‘]/g, "'").replace(/[“”]/g, '"')
   const flat = text.replace(/\s+/g, ' ')
   const hits = labelHits(text)
@@ -208,6 +368,24 @@ export function parseNotice(raw) {
   const score = Math.round(keyFields.reduce((a, k) => a + (c[k] === 'high' ? 1 : c[k] === 'med' ? 0.6 : 0), 0) / keyFields.length * 100)
   return { fields: f, confidence: c, score }
 }
+
+// Two readers: the El Paso rules (tested with real county scans) and the generic label reader.
+// Take the rules first and fill any gap from the label reader.
+export function parseNotice(raw) {
+  const A = parseNoticeRules(raw)
+  const cover = stripCoverPages(String(raw || '').replace(/\r/g, ''))
+  const B = parseNoticeLegacy(cover.text)
+  const empty = v => v == null || v === '' || (Array.isArray(v) && !v.length)
+  for (const k of Object.keys(B.fields)) {
+    if (empty(A.fields[k]) && !empty(B.fields[k])) { A.fields[k] = B.fields[k]; A.confidence[k] = B.confidence[k] === 'high' ? 'med' : B.confidence[k] || 'med' }
+    else if (k === 'sale_time_window' && A.fields[k] && B.fields[k] && /to/.test(B.fields[k]) && !/to/.test(A.fields[k])) A.fields[k] = B.fields[k]
+  }
+  if (!A.fields.filing_date && B.fields.filing_date) A.fields.filing_date = B.fields.filing_date
+  const keyFields = ['sale_date', 'property_address', 'grantors', 'mortgagee', 'trustees', 'legal_description']
+  A.score = Math.round(keyFields.reduce((a, k) => a + (A.confidence[k] === 'high' ? 1 : A.confidence[k] === 'med' ? 0.6 : 0), 0) / keyFields.length * 100)
+  return A
+}
+
 function trimCo(v) {
   if (!v) return null
   return v.replace(/\s*(?:,\s*)?(?:whose\s+address|located\s+at|c\/o\s|by\s+and\s+through|as\s+(?:the\s+)?(?:current\s+)?(?:mortgagee|beneficiary)|which\s+is).*$/i, '').replace(/[.,]+$/, '').trim().slice(0, 140) || null

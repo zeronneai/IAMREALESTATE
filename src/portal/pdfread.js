@@ -39,7 +39,8 @@ export async function readDocument(file, onProgress) {
     return { pages: [{ lines, ocr: true }], text: lines.join('\n'), ocrPages: 1 }
   }
   const lib = await pdfjs()
-  const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
+  // wasmUrl is required by pdf.js 5 to decode county scans (CCITT/JBIG2 fax images); without it pages render blank.
+  const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), wasmUrl: '/pdfjs/wasm/', standardFontDataUrl: '/pdfjs/standard_fonts/' }).promise
   const pages = []
   let ocrPages = 0
   for (let i = 1; i <= doc.numPages; i++) {
