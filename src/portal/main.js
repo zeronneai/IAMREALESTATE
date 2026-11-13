@@ -90,7 +90,7 @@ function login() {
   app.className = ''
   app.innerHTML = `<div class="ribbon"><span>${esc(t('proposal.by'))}</span><span class="pra">PURPLE ROOTS</span></div>
   <div class="login"><form class="box"><span class="mk" style="font-size:28px"><span class="i">I</span>AM</span><h2>${esc(t('login.title'))}</h2><p class="muted" style="margin:0">${esc(t('login.hint'))}</p>
-  <input type="email" name="email" required placeholder="you@iamrealestate.co" autocomplete="email" /><button class="btn gold" style="height:42px">${esc(t('login.send'))}</button><p class="muted" id="lmsg" style="margin:0"></p></form></div>`
+  <input type="email" name="email" required placeholder="you@iamrealestate.co" autocomplete="email" /><button class="btn gold" style="height:42px">${esc(t('login.send'))}</button><p class="muted" id="lmsg" style="margin:0"></p><a class="muted" href="/portal/?demo" style="font-size:12px">${esc(t('login.demo'))}</a></form></div>`
   app.querySelector('form').onsubmit = async e => {
     e.preventDefault()
     try { await S.sendMagicLink(new FormData(e.target).get('email')); $('#lmsg').textContent = t('login.sent') } catch (err) { $('#lmsg').textContent = err.message }

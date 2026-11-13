@@ -213,6 +213,7 @@ const D = {
   'login.hint': ['We email you a secure sign in link.', 'Te mandamos un link seguro a tu correo.'],
   'login.send': ['Send link', 'Enviar link'],
   'login.sent': ['Check your inbox', 'Revisa tu correo'],
+  'login.demo': ['View demo with sample data', 'Ver demo con datos de muestra'],
   'logout': ['Sign out', 'Salir'],
   'toast.added': ['Added to list', 'Agregado a la lista'],
   'toast.copied': ['Copied to clipboard', 'Copiado'],

@@ -7,7 +7,9 @@ import { score, derive, DEFAULT_WEIGHTS } from './score.js'
 const KEY = 'iam_portal_demo_v1'
 const SB_URL = import.meta.env.VITE_SUPABASE_URL
 const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-export const MODE = SB_URL && SB_KEY ? 'supabase' : 'demo'
+// ?demo in the URL always forces the sample-data demo (for sales presentations), even when Supabase is configured.
+const FORCE_DEMO = (() => { try { return new URLSearchParams(location.search).has('demo') } catch { return false } })()
+export const MODE = SB_URL && SB_KEY && !FORCE_DEMO ? 'supabase' : 'demo'
 
 let db = null          // { parcels, inventory, lists, imports, settings }
 let sb = null
