@@ -21,7 +21,7 @@ Sistema interno de adquisiciones: remates (foreclosures), leads, listas en lote,
 ## Modo demo vs producción
 
 * **Demo (como está hoy):** sin variables de entorno, el portal usa datos ficticios guardados en el navegador. Todos los nombres llevan "Demo", los teléfonos son 555-01xx y los bancos son genéricos. Los botones de skip trace y CRM simulan el resultado. Hay una franja "Datos demo" arriba.
-* **Producción:** al configurar Supabase el portal pide inicio de sesión por correo (magic link) y guarda todo en la base de datos del equipo.
+* **Producción:** al configurar Supabase el portal pide correo y contraseña (sin correos de confirmación) y guarda todo en la base de datos del equipo.
 
 ## Arquitectura
 
@@ -68,11 +68,13 @@ Sistema interno de adquisiciones: remates (foreclosures), leads, listas en lote,
 
 1. Crear proyecto en supabase.com (región US West o US Central).
 2. SQL Editor: pegar y correr `supabase/schema.sql`. Crea tablas, políticas RLS y los buckets privados `statements` y `notices`.
-3. Authentication > URL Configuration: agregar `https://TU-DOMINIO/portal/` como Redirect URL.
-4. Copiar `Project URL` y `anon key` a Vercel como `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`, y `service_role` como `SUPABASE_SERVICE_ROLE_KEY`. Redeploy.
-5. Cada persona del equipo entra a `/portal`, pide su link y entra una vez. Luego un admin la agrega en SQL:
-   `insert into team_members (user_id, email, role) select id, email, 'agent' from auth.users where email = 'correo@dominio.com';`
-   Sin estar en `team_members` no puede leer nada (RLS).
+3. SQL Editor: correr también `supabase/team.sql` (se puede correr varias veces).
+4. Authentication > Sign In / Providers > Email: dejar Email activado y APAGAR "Confirm email". Recomendado: apagar "Allow new users to sign up" (las cuentas las crea un admin desde el portal).
+5. Copiar `Project URL` y `anon key` a Vercel como `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`, y `service_role` como `SUPABASE_SERVICE_ROLE_KEY` (solo servidor). Redeploy.
+6. Equipo: un admin entra a Ajustes > Equipo > Agregar miembro (nombre, correo, contraseña temporal, rol Admin / Agente / Solo lectura) y le pasa sus datos a la persona. Desde ahí también restablece contraseñas, cambia roles y quita miembros. Cada quien cambia su contraseña desde el menú de su cuenta (abajo a la izquierda).
+   Si `team_members` está vacía, la primera persona que entra se vuelve admin automáticamente (`/api/admin/users`).
+   Sin estar en `team_members` no puede entrar ni leer nada (RLS).
+7. Herramientas técnicas (estado de integraciones, subir índice de EPCAD manual, traer avisos del condado, ayuda de IA): solo para admins abriendo `/portal/?advanced` o el link discreto "Ajustes avanzados" al final de Ajustes.
 
 ## De dónde salen los datos y qué permisos se necesitan
 

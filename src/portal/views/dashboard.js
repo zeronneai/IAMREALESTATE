@@ -1,6 +1,6 @@
 import { t } from '../i18n.js'
 import * as S from '../store.js'
-import { esc, money, date, scoreColor } from '../ui.js'
+import { esc, money, date, scoreInk } from '../ui.js'
 import { firstTuesdays, today, daysUntil } from '../score.js'
 import { openDrawer } from '../drawer.js'
 import { mountMap } from '../map.js'
@@ -47,7 +47,7 @@ export function dashboard(el) {
       }).join('')}</div>
     </div>
     <div class="card fade-in"><h3>${esc(t('dash.scores'))}</h3>
-      <div class="bars">${buckets.map((n, i) => `<div class="b"><em>${n}</em><i style="height:${(n / maxB) * 110}px;background:${scoreColor(i * 10 + 5)}"></i><span>${i * 10}</span></div>`).join('')}</div>
+      <div class="bars">${buckets.map((n, i) => `<div class="b"><em>${n}</em><i style="height:${(n / maxB) * 110}px;background:${scoreInk(i * 10 + 5)}"></i><span>${i * 10}</span></div>`).join('')}</div>
     </div>
   </div>
   <div class="grid-2">

@@ -31,11 +31,13 @@ export const ICON = {
 export const icon = (k, cls = '') => `<svg viewBox="0 0 24 24" class="${cls}" aria-hidden="true">${ICON[k] || ''}</svg>`
 
 export function scoreColor(s) {
-  if (s >= 70) return 'linear-gradient(135deg,#f0cf74,#d9a93a)'
-  if (s >= 50) return '#c9b27a'
-  if (s >= 30) return '#8f8574'
-  return '#5f584c'
+  if (s >= 70) return 'linear-gradient(135deg,#ecc860,#c99a2e)'
+  if (s >= 50) return '#efdcae'
+  if (s >= 30) return '#e6e2d9'
+  return '#efedea'
 }
+// Solid score color for marks on a light surface (map pins, chart bars).
+export const scoreInk = s => s >= 70 ? '#c99a2e' : s >= 50 ? '#3a362f' : s >= 30 ? '#8f897d' : '#c9c3b8'
 export const scorePill = s => `<span class="score" style="background:${scoreColor(s)}">${s}</span>`
 export const statusPill = st => {
   const cls = { new: 'blue', contacted: '', appointment: 'gold', offer: 'gold', under_contract: 'ok', dead: 'bad' }[st] || ''
@@ -162,7 +164,8 @@ export async function skipTrace(ids) {
     }
     return toast(t('toast.skip_ok'))
   }
-  if (S.MODE === 'demo' || res.status === 501 || res.status === 404 || res.status === 0) {
+  if (S.MODE !== 'demo' && (res.status === 501 || res.status === 404)) return toast(t('toast.skip_off'))
+  if (S.MODE === 'demo') {
     for (const p of ps) {
       const n = Math.random() < 0.8 ? 2 : 1
       const contacts = Array.from({ length: n }, (_, k) => ({ kind: 'phone', value: `(915) 555-01${FAKE_SUFFIX()}`, phoneType: k ? 'landline' : 'mobile', dnc: Math.random() < 0.12, litigator: Math.random() < 0.03, confidence: 60 + Math.floor(Math.random() * 38), provider: 'demo' }))

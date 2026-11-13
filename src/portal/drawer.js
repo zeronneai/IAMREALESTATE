@@ -89,8 +89,8 @@ function render(dr) {
         <div><span>${esc(t('d.balance'))}</span><b>${money(d.mortgageBal)}</b></div>
         <div><span>${esc(t('d.equity'))}</span><b style="color:${d.equity > 0 ? 'var(--ok)' : 'var(--bad)'}">${money(d.equity)}</b><span class="mono">${d.equityPct}%</span></div>
       </div>
-      <div class="stack" role="img" aria-label="debt vs equity">${seg(d.mortgageBal, '#a77a1d')}${seg(d.otherLiens, '#e07a5f')}${seg(d.taxDue, '#e8b04a')}${seg(Math.max(0, d.equity), '#7fbf8a')}</div>
-      <div class="legend"><span><i style="background:#a77a1d"></i>${esc(t('d.balance'))}</span><span><i style="background:#e07a5f"></i>${esc(t('d.other_liens'))} ${money(d.otherLiens)}</span><span><i style="background:#e8b04a"></i>${esc(t('d.taxes_due'))} ${money(d.taxDue)}</span><span><i style="background:#7fbf8a"></i>${esc(t('d.equity'))}</span></div>
+      <div class="stack" role="img" aria-label="debt vs equity">${seg(d.mortgageBal, '#c99a2e')}${seg(d.otherLiens, '#d4664b')}${seg(d.taxDue, '#e9b949')}${seg(Math.max(0, d.equity), '#3a9a5b')}</div>
+      <div class="legend"><span><i style="background:#c99a2e"></i>${esc(t('d.balance'))}</span><span><i style="background:#d4664b"></i>${esc(t('d.other_liens'))} ${money(d.otherLiens)}</span><span><i style="background:#e9b949"></i>${esc(t('d.taxes_due'))} ${money(d.taxDue)}</span><span><i style="background:#3a9a5b"></i>${esc(t('d.equity'))}</span></div>
     </div>
 
     ${f ? `<div class="sec"><h4>${esc(t('d.foreclosure'))}</h4><div class="kv">

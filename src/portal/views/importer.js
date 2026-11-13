@@ -13,45 +13,52 @@ const ZIP_LL = { '79912': [31.842, -106.54], '79932': [31.873, -106.59], '79924'
 export const jitter = z => { const b = ZIP_LL[z]; return b ? { lat: b[0] + (Math.random() - 0.5) * 0.03, lng: b[1] + (Math.random() - 0.5) * 0.03 } : {} }
 const findByStreet = street => { const k = normStreet(street); return S.parcels().find(p => normStreet(p.address) === k) }
 
+const DEMO = S.MODE === 'demo'
+const kindLabel = k => { const v = t('ik.' + k); return v === 'ik.' + k ? k : v }
+const head = (title, sub) => `<h3>${esc(title)}${sub ? `<span class="r muted" style="font-size:13px;font-weight:500">${esc(sub)}</span>` : ''}</h3>`
+
 export function importer(el) {
+  const adv = S.advanced()
   el.innerHTML = `
   <div class="import-grid">
-    <div class="card fade-in" style="grid-column:1/-1"><h3>01 · ${esc(t('i.notices'))}<span class="r pill ok">${esc(t('s.keyless'))}</span></h3>
-      <p class="muted" style="margin-top:0">${esc(t('i.notices_hint'))}</p>
+    <div class="card fade-in" style="grid-column:1/-1">${head(t('i.notices'), t('i.notices_sub'))}
+      <p class="lead">${esc(t('i.notices_hint'))}</p>
       <div class="drop" id="ndrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>PDF · JPG · PNG</p></div>
-      <div class="toolbar" style="margin-top:10px"><span class="muted" style="font-size:12.5px">${esc(t('i.try'))}:</span>
+      <div class="toolbar" style="margin-top:12px"><a class="btn sm ghost" href="https://apps.epcountytx.gov/publicrecords/Foreclosures" target="_blank" rel="noopener">${esc(t('i.open_county'))}</a>
+        ${DEMO ? `<span class="sp"></span><span class="muted" style="font-size:12.5px">${esc(t('i.try'))}:</span>
         <button class="btn sm" data-sample="sample-notices-packet.pdf">${esc(t('i.sample_text'))}</button>
-        <button class="btn sm" data-sample="sample-notice-scanned.pdf">${esc(t('i.sample_scan'))}</button></div>
+        <button class="btn sm" data-sample="sample-notice-scanned.pdf">${esc(t('i.sample_scan'))}</button>` : ''}</div>
       <div id="nprog"></div>
       <div class="review" id="nreview" style="margin-top:12px"></div>
     </div>
-    <div style="display:grid;gap:18px;align-content:start">
-      <div class="card fade-in"><h3>02 · ${esc(t('i.fetch'))}</h3>
-        <p class="muted" style="margin-top:0">${esc(t('i.fetch_hint'))}</p>
-        <div class="toolbar"><input type="month" id="fmonth" value="${new Date().toISOString().slice(0, 7)}" class="inp" /><button class="btn gold" id="fetch">${esc(t('i.fetch'))}</button>
-        <a class="btn ghost" href="https://apps.epcountytx.gov/publicrecords/Foreclosures" target="_blank" rel="noopener">${esc(t('i.open_county'))}</a></div>
-        <div id="fout" style="margin-top:10px"></div>
+    <div class="card fade-in">${head(t('i.epcad'))}
+      <div id="esrv" style="margin-bottom:14px"></div>
+      <p class="lead">${esc(t('i.epcad_hint'))}</p>
+      <div class="drop" id="edrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>TXT · CSV</p></div>
+      <div class="toolbar" style="margin-top:12px"><a class="btn sm ghost" href="https://epcad.org/OpenGovernment" target="_blank" rel="noopener">${esc(t('i.epcad_link'))}</a>${DEMO ? `<button class="btn sm" data-esample>${esc(t('i.try'))}</button>` : ''}<span class="sp"></span><button class="btn sm gold" id="epapply" disabled>${esc(t('i.epcad_apply'))}</button></div>
+      <div id="eout" style="display:grid;gap:8px;margin-top:10px"></div>
+    </div>
+    <div style="display:grid;gap:24px;align-content:start">
+      <div class="card fade-in">${head(t('i.tax'))}
+        <p class="lead">${esc(t('i.tax_hint'))}</p>
+        <div class="drop" id="tdrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>PDF · CSV</p></div>
+        ${DEMO ? `<div class="toolbar" style="margin-top:12px"><span class="muted" style="font-size:12.5px">${esc(t('i.try'))}:</span><button class="btn sm" data-tsample="sample-tax-list.pdf">${esc(t('i.tax'))}</button></div>` : ''}
+        <div id="tout"></div>
       </div>
-      <div class="card fade-in"><h3>03 · ${esc(t('i.epcad'))}<span class="r pill" id="epstat">…</span></h3>
-        <p class="muted" style="margin-top:0">${esc(t('i.epcad_hint'))}</p>
-        <div class="drop" id="edrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>TXT (~) · CSV</p></div>
-        <div class="toolbar" style="margin-top:10px"><a class="btn sm ghost" href="https://epcad.org/OpenGovernment" target="_blank" rel="noopener">epcad.org/OpenGovernment</a><button class="btn sm" data-esample>${esc(t('i.try'))}</button><button class="btn sm gold" id="epapply" disabled>${esc(t('i.epcad_apply'))}</button></div>
-        <div id="esrv"></div>
-        <div id="eout"></div>
+      <div class="card fade-in">${head(t('i.csv'), t('i.csv_sub'))}
+        <p class="lead">${esc(t('i.csv_hint'))}</p>
+        <div class="drop" id="cdrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>CSV</p></div>
       </div>
     </div>
-    <div class="card fade-in"><h3>04 · ${esc(t('i.tax'))}<span class="r pill ok">${esc(t('s.keyless'))}</span></h3>
-      <p class="muted" style="margin-top:0">${esc(t('i.tax_hint'))}</p>
-      <div class="drop" id="tdrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>PDF · CSV</p></div>
-      <div class="toolbar" style="margin-top:10px"><span class="muted" style="font-size:12.5px">${esc(t('i.try'))}:</span><button class="btn sm" data-tsample="sample-tax-list.pdf">sample-tax-list.pdf</button></div>
-      <div id="tout"></div>
+    <div class="card fade-in" style="grid-column:1/-1">${head(t('i.history'))}
+      <table class="mini"><tr><th>${esc(t('i.h_date'))}</th><th>${esc(t('i.h_type'))}</th><th>${esc(t('i.h_file'))}</th><th class="num">${esc(t('i.h_rows'))}</th></tr>${S.imports().slice(0, 10).map(i => `<tr><td style="font-size:12.5px">${esc(date(i.at))}</td><td>${esc(kindLabel(i.kind))}</td><td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName || '')}</td><td class="num">${i.rowsOk}/${i.rowsIn}</td></tr>`).join('')}</table>
     </div>
-    <div class="card fade-in"><h3>05 · ${esc(t('i.csv'))}</h3>
-      <p class="muted" style="margin-top:0">${esc(t('i.csv_hint'))}</p>
-      <div class="drop" id="cdrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>CSV</p></div>
-      <h3 style="margin-top:22px">${esc(t('i.history'))}</h3>
-      <table class="mini"><tr><th>Date</th><th>Type</th><th>File</th><th class="num">Rows</th></tr>${S.imports().slice(0, 10).map(i => `<tr><td class="mono" style="font-size:11.5px">${esc(new Date(i.at).toLocaleDateString())}</td><td>${esc(i.kind)}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName || '')}</td><td class="num">${i.rowsOk}/${i.rowsIn}</td></tr>`).join('')}</table>
-    </div>
+    ${adv ? `<div class="card fade-in" style="grid-column:1/-1">${head(t('i.adv_tools'), 'advanced')}
+      <p class="muted" style="margin-top:0;font-size:12.5px">${esc(t('i.fetch_hint'))}</p>
+      <div class="toolbar"><input type="month" id="fmonth" value="${new Date().toISOString().slice(0, 7)}" class="inp" /><button class="btn" id="fetch">${esc(t('i.fetch'))}</button></div>
+      <div id="fout" style="margin-top:10px"></div>
+      <div id="eadv" style="margin-top:14px"></div>
+    </div>` : ''}
   </div>`
   renderPending()
   dropzone($('#ndrop', el), files => notices(files), { accept: 'application/pdf,image/*' })
@@ -59,18 +66,18 @@ export function importer(el) {
   dropzone($('#tdrop', el), files => taxFile(files[0]), { multiple: false, accept: 'application/pdf,.csv,text/csv' })
   dropzone($('#cdrop', el), files => csvFlow(files[0], 'list'), { multiple: false, accept: '.csv,text/csv' })
   el.querySelectorAll('[data-sample]').forEach(b => b.onclick = async () => notices([await sampleFile(b.dataset.sample)]))
-  el.querySelector('[data-tsample]').onclick = async () => taxFile(await sampleFile('sample-tax-list.pdf'))
+  el.querySelector('[data-tsample]')?.addEventListener('click', async () => taxFile(await sampleFile('sample-tax-list.pdf')))
   epStatus()
-  el.querySelector('[data-esample]').onclick = async () => epcadFiles(await Promise.all(['Properties', 'Owners', 'Values', 'Deeds'].map(async n => { const r = await fetch(`/portal-samples/sample-epcad-${n}.txt`); return new File([await r.blob()], `sample-epcad-${n}.txt`, { type: 'text/plain' }) })))
+  el.querySelector('[data-esample]')?.addEventListener('click', async () => epcadFiles(await Promise.all(['Properties', 'Owners', 'Values', 'Deeds'].map(async n => { const r = await fetch(`/portal-samples/sample-epcad-${n}.txt`); return new File([await r.blob()], `sample-epcad-${n}.txt`, { type: 'text/plain' }) }))))
   $('#epapply', el).onclick = () => applyEpcadAll()
-  $('#fetch', el).onclick = async () => {
+  $('#fetch', el)?.addEventListener('click', async () => {
     const out = $('#fout', el); out.innerHTML = '<div class="boot-bar" style="width:100%"></div>'
     const r = await api('/api/sources/epcounty', { month: $('#fmonth', el).value }).catch(() => ({ status: 0 }))
     if (r.ok) {
       pending.push(...(r.data.notices || []).map(n => ({ file: n.source_url || 'county source', fields: n.fields, confidence: n.confidence, score: n.score, text: n.text || '' })))
       out.innerHTML = `<div class="alert ok">${r.data.count} ${esc(t('i.found'))}${r.data.skipped ? ` · ${r.data.skipped} dup` : ''}</div>`; renderPending()
     } else out.innerHTML = `<div class="alert">${esc(t('i.not_configured'))}${r.data?.needs ? `<br/><span class="mono" style="font-size:11.5px">${esc(r.data.needs.join(', '))}</span>` : ''}${r.data?.detail ? `<br/><span class="mono" style="font-size:11.5px">${esc(r.data.detail)}</span>` : ''}</div>`
-  }
+  })
 }
 async function sampleFile(name) {
   const r = await fetch('/portal-samples/' + name)
@@ -91,7 +98,7 @@ async function notices(files) {
       const found = parseNotices(doc.text)
       found.forEach((n, k) => pending.push({ file: found.length > 1 ? `${f.name} · #${k + 1}` : f.name, fields: n.fields, confidence: n.confidence, score: n.score, text: n.text, ocr: doc.ocrPages > 0, raw: f }))
       document.getElementById(id)?.remove()
-      toast(`${f.name}: ${found.length} ${t('i.found')}${doc.ocrPages ? ' · OCR' : ''}`)
+      toast(`${f.name}: ${found.length} ${t('i.found')}`)
     } catch (e) {
       console.warn(e)
       const n = document.getElementById(id); if (n) n.outerHTML = `<div class="alert bad">${esc(f.name)}: ${esc(e.message || t('toast.err'))}</div>`
@@ -116,18 +123,18 @@ function renderPending() {
     const sc = x.score ?? 0
     return `<div class="review-item" data-i="${i}">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><b style="word-break:break-all">${esc(x.file)}</b>
-        <span style="display:flex;gap:6px;align-items:center">${x.ocr ? `<span class="pill blue">OCR</span>` : ''}<span class="pill ${sc >= 85 ? 'ok' : sc >= 60 ? 'warn' : 'bad'}">${esc(t('i.conf'))} ${sc}%</span></span></div>
+        <span style="display:flex;gap:6px;align-items:center">${x.ocr ? `<span class="pill blue">${esc(t('i.scanned'))}</span>` : ''}<span class="pill ${sc >= 85 ? 'ok' : sc >= 60 ? 'warn' : 'bad'}">${esc(t('i.conf'))} ${sc}%</span></span></div>
       ${sc < 85 ? `<div class="muted" style="font-size:12px">${esc(t('i.check'))}</div>` : ''}
       <div class="rv-split"><div class="form-grid">${FIELDS.map(fld).join('')}</div>
         <details class="raw"><summary>${esc(t('i.raw'))}</summary><pre>${esc((x.text || '').slice(0, 6000))}</pre></details></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn sm ghost" data-ai>${esc(t('i.ai_assist'))}</button><button class="btn sm ghost" data-discard>${esc(t('i.discard'))}</button><button class="btn sm gold" data-approve>${esc(t('i.approve'))}</button></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${S.advanced() ? `<button class="btn sm ghost" data-ai>${esc(t('i.ai_assist'))}</button>` : ''}<button class="btn sm ghost" data-discard>${esc(t('i.discard'))}</button><button class="btn sm gold" data-approve>${esc(t('i.approve'))}</button></div>
     </div>`
   }).join('')
   box.querySelector('[data-allhi]')?.addEventListener('click', async () => { for (const x of pending.filter(y => y.score >= 85)) await approve(x, x.fields); pending = pending.filter(y => y.score < 85); renderPending() })
   box.querySelectorAll('.review-item').forEach(it => {
     const i = +it.dataset.i, x = pending[i]
     it.querySelector('[data-discard]').onclick = () => { pending.splice(i, 1); renderPending() }
-    it.querySelector('[data-ai]').onclick = async () => {
+    it.querySelector('[data-ai]')?.addEventListener('click', async () => {
       if (!x.raw || x.raw.size > 3_300_000) return toast(t('i.ai_none'))
       const r = await api('/api/extract-notice', { file: await fileToDataURL(x.raw) }).catch(() => ({ status: 0 }))
       if (!r.ok) return toast(t('i.ai_none'))
@@ -135,10 +142,10 @@ function renderPending() {
       const a = { ...a0, instrument_number: a0.instrument_number || a0.deed_of_trust_instrument, servicer: a0.servicer || a0.mortgage_servicer }
       for (const k of Object.keys(x.fields)) if ((x.fields[k] == null || x.fields[k] === '' || (Array.isArray(x.fields[k]) && !x.fields[k].length)) && a[k] != null) { x.fields[k] = a[k]; x.confidence[k] = 'med' }
       renderPending()
-    }
+    })
     it.querySelector('[data-approve]').onclick = async () => {
       const v = Object.fromEntries([...it.querySelectorAll('[data-k]')].map(inp => [inp.dataset.k, inp.value.trim()]))
-      if (!v.property_address || !v.sale_date) return toast('Address + sale date')
+      if (!v.property_address || !v.sale_date) return toast(t('i.need_addr'))
       await approve(x, v); pending.splice(i, 1); renderPending()
     }
   })
@@ -158,49 +165,54 @@ async function approve(x, v) {
   toast(`${t('i.done')}: ${res.added} · ${t('i.updated')}: ${res.updated}`)
 }
 
-// ---------- 03 EPCAD index ----------
+// ---------- county records (EPCAD index) ----------
 const fmtN = n => Number(n || 0).toLocaleString()
+let saving = false
 async function epStatus() {
-  const st = $('#epstat'), ap = $('#epapply'), srv = $('#esrv'); if (!st) return
+  const ap = $('#epapply'), srv = $('#esrv'); if (!srv) return
   const m = await EP.ready().catch(() => null)
   let server = null
   if (S.MODE === 'supabase') server = await EP.serverStatus().catch(() => null)
   const onServer = server?.count > 0
-  st.className = 'r pill ' + (onServer || m ? 'ok' : '')
-  st.textContent = onServer ? `${t('i.epcad_server')} · ${fmtN(server.count)}` : m ? `${t('i.epcad_ready')} · ${fmtN(m.count)}` : t('i.epcad_none')
   if (ap) ap.disabled = !(m || onServer)
-  if (srv && S.MODE === 'supabase') {
+  const at = server?.at || S.settings()?.epcad_meta?.at
+  const line = (on, title, small) => `<div class="status-line ${on ? '' : 'off'}"><span class="dot"></span><span>${esc(title)}</span>${small ? `<small>${esc(small)}</small>` : ''}</div>`
+  let html = onServer ? line(true, `${t('i.epcad_loaded')}${at ? ' · ' + date(at) : ''}`, `${fmtN(server.count)} ${t('i.parcels')}`)
+    : m ? line(true, t('i.epcad_ready'), `${fmtN(m.count)} ${t('i.parcels')}`)
+    : line(false, t('i.epcad_none'))
+  if (S.MODE === 'supabase') {
     let pend = EP.pendingUpload(); const up = EP.uploadState()
-    // Upload already finished for these files: hide the button and keep the real total for the team.
     if (up?.finishedAt && pend?.length && up.total === pend.length) {
       pend = null
       if (!S.settings()?.epcad_meta) { S.saveSettings({ epcad_meta: { count: up.total, at: up.finishedAt } }).then(() => epStatus()).catch(() => {}) }
     }
-    srv.innerHTML = server?.error === 'no_table'
-      ? `<div class="alert bad" style="margin-top:10px">${esc(t('i.epcad_no_table'))}</div>`
-      : `<div class="muted" style="font-size:12.5px;margin-top:10px">${esc(t('i.epcad_server'))}: <b>${fmtN(server?.count)}</b> ${esc(t('i.parcels'))}${server?.at ? ` · ${esc(t('i.updated'))} ${esc(new Date(server.at).toLocaleString())}` : ''}</div>
-         ${pend?.length ? `<div class="toolbar" style="margin-top:8px"><button class="btn sm gold" id="epup">${esc(up && up.done && up.done < up.total ? t('i.epcad_resume') : t('i.epcad_upload'))} (${fmtN(pend.length)})</button><button class="btn sm ghost" id="epstop" style="display:none">${esc(t('i.epcad_stop'))}</button></div><div class="up-bar" id="epbar" style="display:none"><span></span></div><div class="muted mono" id="epupt" style="font-size:11.5px"></div>` : ''}`
-    $('#epup')?.addEventListener('click', uploadEpcad)
-    $('#epstop')?.addEventListener('click', () => EP.stopUpload())
+    if (server?.error === 'no_table') html += `<div class="alert bad" style="margin-top:10px">${esc(S.advanced() ? t('i.epcad_no_table') : t('i.epcad_not_ready'))}</div>`
+    else if (pend?.length && !saving) html += `<div class="toolbar" style="margin-top:10px"><button class="btn sm gold" id="epup">${esc(t('i.epcad_save_again'))}</button></div>`
+    html += `<div id="epsave" style="display:none;margin-top:10px"><div class="up-bar"><span></span></div><div class="muted" style="font-size:12.5px"></div>${S.advanced() ? `<button class="btn sm ghost" id="epstop" style="margin-top:6px">${esc(t('i.epcad_stop'))}</button>` : ''}</div>`
   }
+  srv.innerHTML = html
+  $('#epup')?.addEventListener('click', uploadEpcad)
+  $('#epstop')?.addEventListener('click', () => EP.stopUpload())
 }
+// Saves the county index for the whole team. Starts by itself after the files are read.
 async function uploadEpcad() {
-  const bar = $('#epbar'), txt = $('#epupt'), btn = $('#epup'), stop = $('#epstop')
-  bar.style.display = 'block'; btn.disabled = true; stop.style.display = ''
-  const t0 = Date.now()
+  if (saving) return
+  saving = true
+  $('#epup')?.remove()
+  const box = $('#epsave'); if (box) box.style.display = ''
+  const bar = box?.querySelector('.up-bar span'), txt = box?.querySelector('.muted')
   try {
     const r = await EP.uploadToServer(({ done, total }) => {
-      bar.firstElementChild.style.width = `${Math.round((done / total) * 100)}%`
-      const sec = (Date.now() - t0) / 1000
-      txt.textContent = `${fmtN(done)} / ${fmtN(total)} · ${Math.round((done / total) * 100)}%`
-      void sec
+      const pct = Math.round((done / total) * 100)
+      if (bar) bar.style.width = `${pct}%`
+      if (txt) txt.textContent = `${t('i.epcad_saving')} · ${pct}%`
     })
-    toast(r.stopped ? t('i.epcad_paused') : `${t('i.epcad_uploaded')} · ${fmtN(r.done)}`)
+    toast(r.stopped ? t('i.epcad_paused') : t('i.epcad_saved'))
   } catch (e) {
     console.warn(e)
-    txt.textContent = e.code === 'no_table' ? t('i.epcad_no_table') : `${t('i.epcad_upload_err')} (${fmtN(e.done)}): ${e.message}`
+    if (txt) txt.textContent = e.code === 'no_table' ? t(S.advanced() ? 'i.epcad_no_table' : 'i.epcad_not_ready') : S.advanced() ? `${t('i.epcad_upload_err')} (${fmtN(e.done)}): ${e.message}` : t('i.epcad_save_err')
   }
-  btn.disabled = false; stop.style.display = 'none'
+  saving = false
   epStatus()
 }
 async function epcadFiles(files) {
@@ -219,7 +231,7 @@ async function epcadFiles(files) {
         await epStatus(); await applyEpcadAll()
       } catch (e) {
         console.warn(e)
-        out.innerHTML = `<div class="alert bad">${esc(e.code === 'no_server' ? t('i.epcad_values_server') : `${t('i.epcad_upload_err')} (${fmtN(e.done || 0)}): ${e.message}`)}</div>`
+        out.innerHTML = `<div class="alert bad">${esc(e.code === 'no_server' ? t('i.epcad_values_server') : S.advanced() ? `${t('i.epcad_upload_err')} (${fmtN(e.done || 0)}): ${e.message}` : t('i.epcad_save_err'))}</div>`
       }
     }
     if (!files.length) return
@@ -232,12 +244,13 @@ async function epcadFiles(files) {
     })
     const kinds = r.files.map(f => f.kind).filter(Boolean)
     const missing = r.kind === 'dump' ? ['owners', 'improvements', 'deeds', 'lands'].filter(k => !kinds.includes(k)) : []
-    out.innerHTML = `<div class="alert ok">${fmtN(r.count)} ${esc(t('i.parcels'))} · ${r.files.map(f => `${esc(f.name)} (${fmtN(f.rows)})`).join(', ')}</div>
+    out.innerHTML = `<div class="alert ok">${fmtN(r.count)} ${esc(t('i.parcels'))}${S.advanced() ? ' · ' + r.files.map(f => `${esc(f.name)} (${fmtN(f.rows)})`).join(', ') : ''}</div>
       ${missing.length ? `<div class="alert">${esc(t('i.epcad_missing'))}: ${missing.join(', ')}</div>` : ''}
       ${r.kind === 'dump' && !r.valuesFilled ? `<div class="alert">${esc(t('i.epcad_no_values'))}</div>` : ''}
       ${r.skipped?.length ? `<div class="alert">${esc(t('i.epcad_skipped'))}: ${r.skipped.map(esc).join(', ')}</div>` : ''}`
     S.logImport({ kind: 'epcad_index', fileName: files.map(f => f.name).join(', '), rowsIn: r.files.reduce((a, f) => a + f.rows, 0), rowsOk: r.count })
     await epStatus(); applyEpcadAll()
+    if (S.MODE === 'supabase' && EP.pendingUpload()?.length) uploadEpcad()
   } catch (e) {
     console.warn(e)
     if (e.code === 'unknown_layout' && files.length === 1 && /\.csv$/i.test(files[0].name)) { out.innerHTML = ''; return csvFlow(files[0], 'epcad') }
@@ -251,14 +264,14 @@ async function applyEpcadAll() {
   let n = 0, i = 0
   for (const p of list) {
     i++
-    if (out && i % 5 === 0) { const el = $('#epprog'); if (el) el.textContent = `${i} / ${list.length}`; else out.insertAdjacentHTML('beforeend', `<div class="muted mono" id="epprog" style="font-size:11.5px">${i} / ${list.length}</div>`) }
+    if (out && i % 5 === 0) { const el = $('#epprog'); if (el) el.textContent = `${i} / ${list.length}`; else out.insertAdjacentHTML('beforeend', `<div class="muted" id="epprog" style="font-size:12.5px">${i} / ${list.length}</div>`) }
     const patch = await EP.patchForAsync(p).catch(() => null)
     if (patch && S.applyEnrichment(p.id, patch, { silent: true })) n++
   }
   S.done()
   $('#epprog')?.remove()
   if (out) out.insertAdjacentHTML('beforeend', `<div class="alert ok">${n} / ${list.length} ${esc(t('i.epcad_matched'))}</div>`)
-  toast(`EPCAD: ${n} ${t('i.epcad_matched')}`)
+  toast(`${n} ${t('i.epcad_matched')}`)
 }
 
 // ---------- 04 delinquent taxes ----------

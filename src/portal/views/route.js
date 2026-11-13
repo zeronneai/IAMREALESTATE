@@ -31,7 +31,7 @@ export async function routeView(el) {
       <div class="route-map" id="rmap"></div>
     </div>
     <div class="card" style="align-content:start"><h3>${esc(t('route.field'))}<span class="r mono">${done.size}/${stops.length}</span></h3>
-      <div class="stop"><div class="n" style="background:#ece6da">0</div><div><b>${esc(t('route.start'))}</b><div class="muted" style="font-size:12px">${esc(OFFICE.label)}</div></div></div>
+      <div class="stop"><div class="n" style="background:#c99a2e">0</div><div><b>${esc(t('route.start'))}</b><div class="muted" style="font-size:12px">${esc(OFFICE.label)}</div></div></div>
       ${stops.map((p, i) => `<div class="stop ${done.has(p.id) ? 'done' : ''}" data-id="${esc(p.id)}"><div class="n">${i + 1}</div><div>
         <b>${esc(p.address)}</b> <span class="muted" style="font-size:12px">${esc(p.zip)}</span>
         <div class="muted" style="font-size:12px">${esc(p.owners?.[0]?.name || '')}${p.foreclosure ? ` · ${esc(date(p.foreclosure.saleDate))}` : ''} · ${money(p._d.equity, true)}</div>
@@ -64,12 +64,12 @@ export async function routeView(el) {
 async function drawMap(box, stops) {
   if (!L) { const [mod] = await Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')]); L = mod.default || mod }
   const map = L.map(box, { scrollWheelZoom: true, wheelPxPerZoomLevel: 90 }).setView([OFFICE.lat, OFFICE.lng], 12)
-  L.tileLayer(import.meta.env.VITE_MAP_TILES_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: import.meta.env.VITE_MAP_TILES_URL ? '' : 'dark-tiles', attribution: '&copy; OpenStreetMap contributors' }).addTo(map)
+  L.tileLayer(import.meta.env.VITE_MAP_TILES_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: import.meta.env.VITE_MAP_TILES_URL ? '' : 'light-tiles', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map)
   const pin = (n, cls = '') => L.divIcon({ className: '', html: `<div class="num-pin ${cls}">${n}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] })
   const pts = [[OFFICE.lat, OFFICE.lng], ...stops.map(s => [s.lat, s.lng])]
   L.marker(pts[0], { icon: pin('0', 'start') }).addTo(map).bindPopup(esc(OFFICE.label))
   stops.forEach((s, i) => L.marker([s.lat, s.lng], { icon: pin(i + 1) }).addTo(map).bindPopup(`<b>${i + 1}. ${esc(s.address)}</b><br/>${esc(s.owners?.[0]?.name || '')}`))
-  L.polyline(pts, { color: '#d9a93a', weight: 3, opacity: .85, dashArray: '6 6' }).addTo(map)
+  L.polyline(pts, { color: '#121110', weight: 3, opacity: .7, dashArray: '6 6' }).addTo(map)
   map.fitBounds(pts, { padding: [30, 30] })
   setTimeout(() => map.invalidateSize(), 80)
 }

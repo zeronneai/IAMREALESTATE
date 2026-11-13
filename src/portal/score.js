@@ -44,7 +44,7 @@ export const money = (n, short) => {
   if (short && Math.abs(n) >= 1e3) return '$' + Math.round(n / 1e3) + 'K'
   return (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString('en-US')
 }
-export const fmtDate = (iso, lang = 'en') => iso ? new Date(iso + 'T12:00:00').toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'n/a'
+export const fmtDate = (iso, lang = 'en') => iso ? new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'n/a'
 
 export function firstTuesdays(from, n) {
   const out = []

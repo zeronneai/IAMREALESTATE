@@ -32,15 +32,15 @@ export function mortgages(el) {
   <div class="grid-2">
     <div class="card fade-in"><h3>${esc(t('m.history'))}<span class="r mono">${money(totalBal)}</span></h3>
       <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(t('m.history'))}">
-        <defs><linearGradient id="mg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#d9a93a" stop-opacity=".35"/><stop offset="1" stop-color="#d9a93a" stop-opacity="0"/></linearGradient></defs>
-        ${series.length > 1 ? `<path d="${path} L${x(series.length - 1)},${H - P} L${x(0)},${H - P} Z" fill="url(#mg)"/><path d="${path}" fill="none" stroke="#f0cf74" stroke-width="2"/>` : ''}
-        ${series.map((v, i) => `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="#f0cf74"><title>${months[i]}: ${money(v)}</title></circle><text x="${x(i)}" y="${H - 6}" fill="#6f685c" font-size="10" text-anchor="middle" font-family="JetBrains Mono">${months[i].slice(5)}</text>`).join('')}
+        <defs><linearGradient id="mg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#c99a2e" stop-opacity=".22"/><stop offset="1" stop-color="#c99a2e" stop-opacity="0"/></linearGradient></defs>
+        ${series.length > 1 ? `<path d="${path} L${x(series.length - 1)},${H - P} L${x(0)},${H - P} Z" fill="url(#mg)"/><path d="${path}" fill="none" stroke="#121110" stroke-width="2"/>` : ''}
+        ${series.map((v, i) => `<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="#c99a2e" stroke="#fff" stroke-width="1.5"><title>${months[i]}: ${money(v)}</title></circle><text x="${x(i)}" y="${H - 6}" fill="#8f897d" font-size="10.5" text-anchor="middle" font-family="-apple-system, Segoe UI, sans-serif">${months[i].slice(5)}</text>`).join('')}
       </svg>
     </div>
     <div class="card fade-in"><h3>${esc(t('m.upload'))}</h3>
       <div class="f" style="margin-bottom:10px"><label>${esc(t('m.for'))}</label><select id="mfor">${S.inventory().filter(v => v.status !== 'sold').map(v => `<option value="${esc(v.id)}">${esc(v.address)}</option>`).join('')}</select></div>
       <div class="drop" id="mdrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>${esc(t('m.upload_hint'))}</p></div>
-      <div class="toolbar" style="margin-top:10px"><span class="muted" style="font-size:12.5px">${esc(t('i.try'))}:</span><button class="btn sm" data-msample>sample-mortgage-statement.pdf</button></div>
+      ${S.MODE === 'demo' ? `<div class="toolbar" style="margin-top:10px"><span class="muted" style="font-size:12.5px">${esc(t('i.try'))}:</span><button class="btn sm" data-msample>${esc(t('nav.mortgages'))}</button></div>` : ''}
     </div>
   </div>
   <div class="tablewrap fade-in" style="max-height:none">
@@ -51,14 +51,14 @@ export function mortgages(el) {
 
   el.querySelectorAll('[data-paid]').forEach(b => b.onclick = () => { const [a, c] = b.dataset.paid.split('|'); S.markPaid(a, c) })
   dropzone($('#mdrop', el), files => handle(files[0], $('#mfor', el).value), { multiple: false, accept: 'application/pdf,image/*' })
-  el.querySelector('[data-msample]').onclick = async () => { const r = await fetch('/portal-samples/sample-mortgage-statement.pdf'); handle(new File([await r.blob()], 'sample-mortgage-statement.pdf', { type: 'application/pdf' }), $('#mfor', el).value) }
+  el.querySelector('[data-msample]')?.addEventListener('click', async () => { const r = await fetch('/portal-samples/sample-mortgage-statement.pdf'); handle(new File([await r.blob()], 'sample-mortgage-statement.pdf', { type: 'application/pdf' }), $('#mfor', el).value) })
 }
 
 async function handle(file, invId) {
   let data = {}, conf = {}, note = '', score = 0
   const close0 = modal(`<h3>${esc(t('m.reading'))}</h3><div class="boot-bar" style="width:100%"></div><p class="muted" id="mstat">${esc(file.name)}</p>`)
   try {
-    const doc = await readDocument(file, pg => { const n = document.getElementById('mstat'); if (n) n.textContent = `${file.name} · ${pg.stage === 'ocr' ? 'OCR ' + (pg.pct ?? 0) + '%' : (pg.page || 1) + '/' + (pg.pages || 1)}` })
+    const doc = await readDocument(file, pg => { const n = document.getElementById('mstat'); if (n) n.textContent = `${file.name} · ${pg.stage === 'ocr' ? t('i.ocr') + ' ' + (pg.pct ?? 0) + '%' : (pg.page || 1) + '/' + (pg.pages || 1)}` })
     const r = parseStatement(doc.text)
     score = r.score; conf = r.confidence
     const f = r.fields

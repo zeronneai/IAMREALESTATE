@@ -1,7 +1,8 @@
 // Data layer. Two backends with the same API:
-//  - Supabase (production): set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. Team signs in by magic link.
+//  - Supabase (production): set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. Team signs in with email and password.
 //  - Demo (default): fictional seed data kept in this browser (localStorage, wrapped in try/catch).
 import { seed } from './seed.js'
+import { t } from './i18n.js'
 import { score, derive, DEFAULT_WEIGHTS } from './score.js'
 
 const KEY = 'iam_portal_demo_v1'
@@ -60,16 +61,82 @@ export async function init() {
   session = data.session
   sb.auth.onAuthStateChange((_e, s) => { session = s })
   if (!session) return { ready: false, needsLogin: true }
+  await loadRole()
   await loadRemote()
   return { ready: true }
 }
 export const client = () => sb
 export const authHeader = () => (session ? { Authorization: `Bearer ${session.access_token}` } : {})
-export async function sendMagicLink(email) {
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + '/portal/' } })
+export async function signIn(email, password) {
+  const { data, error } = await sb.auth.signInWithPassword({ email: String(email).trim(), password })
+  if (error) throw error
+  session = data.session
+}
+export async function changePassword(password) {
+  if (MODE === 'demo') return
+  const { error } = await sb.auth.updateUser({ password })
   if (error) throw error
 }
-export async function signOut() { if (sb) await sb.auth.signOut(); location.reload() }
+export async function signOut(stay = false) { if (sb) await sb.auth.signOut(); session = null; if (!stay) location.reload() }
+// Role of the signed in user: admin / agent / viewer. Demo acts as admin.
+let myRole = MODE === 'demo' ? 'admin' : null
+export const role = () => myRole
+export const isAdmin = () => myRole === 'admin'
+// Technical tools only for admins who open the portal with ?advanced (or #advanced).
+const ADV = 'iam_adv'
+export function advanced() {
+  if (!isAdmin()) return false
+  try {
+    if (/[?&]advanced\b/.test(location.search) || /[?&]advanced\b/.test(location.hash)) sessionStorage.setItem(ADV, '1')
+    return sessionStorage.getItem(ADV) === '1'
+  } catch { return /advanced/.test(location.search + location.hash) }
+}
+export function leaveAdvanced() { try { sessionStorage.removeItem(ADV) } catch {} }
+
+// ---------- team (admins) ----------
+// Production: /api/admin/users (service role stays on the server). Demo: a local mock list.
+async function adminApi(method, payload, query = '') {
+  const r = await fetch('/api/admin/users' + query, { method, headers: { 'Content-Type': 'application/json', ...authHeader() }, body: payload ? JSON.stringify(payload) : undefined })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) { const k = 'team.e_' + (j.code || 'error'); throw new Error(t(k) !== k ? t(k) : t('team.e_error')) }
+  return j
+}
+const demoTeam = () => {
+  if (!db.settings.demoTeam) db.settings.demoTeam = [
+    { id: 'u-1', name: 'Nadim', email: 'nadim@iamrealestate.co', role: 'admin', created_at: '2026-10-02T15:00:00Z' },
+    { id: 'u-2', name: 'Andrea Ruiz', email: 'andrea@iamrealestate.co', role: 'agent', created_at: '2026-10-20T15:00:00Z' },
+    { id: 'u-3', name: 'Luis Ortega', email: 'luis@iamrealestate.co', role: 'viewer', created_at: '2026-11-04T15:00:00Z' },
+  ]
+  return db.settings.demoTeam
+}
+export async function teamList() {
+  if (MODE === 'demo') return demoTeam().map(m => ({ ...m }))
+  return (await adminApi('GET')).members || []
+}
+export async function teamCreate(m) {
+  if (MODE === 'demo') { demoTeam().push({ id: uid('u'), name: m.name, email: m.email, role: m.role, created_at: new Date().toISOString() }); persist(); return }
+  await adminApi('POST', m)
+}
+export async function teamUpdate(id, patch) {
+  if (MODE === 'demo') { const m = demoTeam().find(x => x.id === id); if (m && patch.role) m.role = patch.role; persist(); return }
+  await adminApi('PATCH', { id, ...patch })
+}
+export async function teamRemove(id) {
+  if (MODE === 'demo') { db.settings.demoTeam = demoTeam().filter(x => x.id !== id); persist(); return }
+  await adminApi('DELETE', { id })
+}
+export const myId = () => session?.user?.id || (MODE === 'demo' ? 'u-1' : null)
+async function loadRole() {
+  try {
+    // First run: the API makes the first signed in user admin when the team is empty.
+    const r = await fetch('/api/admin/users?me=1', { headers: authHeader() })
+    if (r.ok) { const j = await r.json(); myRole = j.role || null; return }
+  } catch {}
+  try {
+    const { data } = await sb.from('team_members').select('role').eq('user_id', session.user.id).maybeSingle()
+    myRole = data?.role || null
+  } catch { myRole = null }
+}
 export const userEmail = () => session?.user?.email || (MODE === 'demo' ? 'demo@iam.portal' : '')
 
 export function resetDemo() { try { localStorage.removeItem(KEY) } catch {} db = seed(); db.parcels.forEach(enrich); persist(); emit() }

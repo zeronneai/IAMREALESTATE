@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:parsers": "node scripts/test-parsers.mjs"
+    "test:parsers": "node scripts/test-parsers.mjs",
+    "test:admin": "node scripts/test-admin-users.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
