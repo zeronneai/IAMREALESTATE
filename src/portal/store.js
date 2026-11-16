@@ -486,7 +486,25 @@ export { derive }
 // ---------- conversations (texts + emails) ----------
 let msgs = []
 const msgRow = r => ({ id: r.id, parcelId: r.parcel_id || null, channel: r.channel, dir: r.direction, peer: r.peer, subject: r.subject || '', body: r.body, status: r.status, error: r.error || null, read: r.read !== false, at: r.created_at || new Date().toISOString() })
-const demoMsgs = () => db.messages || (db.messages = [])
+const demoMsgs = () => db.messages || (db.messages = demoSeedMsgs())
+function demoSeedMsgs() {
+  const withPhone = db.parcels.filter(p => (p.contacts || []).some(c => c.kind === 'phone' && !c.dnc)).slice(0, 4)
+  const ago = (h) => new Date(Date.now() - h * 3600e3).toISOString()
+  const scripts = [
+    [['out', 'Hi {f}, this is Angeline with I AM Real Estate. I saw your property at {a} and wanted to ask if you have ever thought about selling. Any interest in a cash offer?', 30], ['in', 'Maybe. What kind of number are we talking?', 29], ['out', 'Depends on condition. Could I take a quick look this week? Takes 15 minutes.', 28.5], ['in', 'Thursday after 4 works', 2, false]],
+    [['out', 'Hola {f}, soy Angeline de I AM Real Estate. Vi su propiedad en {a}. ¿Ha pensado en venderla? Compramos en efectivo y como está.', 50], ['in', 'Sí, la casa era de mi mamá y ya no vivimos ahí. ¿Cuánto ofrecen?', 6, false]],
+    [['out', 'Hi {f}, following up about {a}. We buy as is and can close before the sale date. Want me to send you a number?', 72], ['in', 'Not interested, thanks.', 70]],
+    [['out', 'Hi {f}, this is Angeline with I AM Real Estate about {a}. Any interest in an offer?', 96]],
+  ]
+  const out = []
+  withPhone.forEach((p, i) => {
+    const ph = p.contacts.find(c => c.kind === 'phone' && !c.dnc).value
+    const f = String(p.owners?.[0]?.name || '').split(/\s+/)[0].toLowerCase().replace(/^./, c => c.toUpperCase())
+    const a = String(p.address).toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+    for (const [dir, body, h, read] of scripts[i]) out.push({ id: uid('m'), parcelId: p.id, channel: 'sms', dir, peer: ph, body: body.replace('{f}', f).replace('{a}', a), status: dir === 'out' ? 'delivered' : 'received', read: read !== false, at: ago(h) })
+  })
+  return out
+}
 export const messages = () => (MODE === 'demo' ? demoMsgs() : msgs)
 export const unreadCount = () => messages().filter(m => m.dir === 'in' && !m.read).length
 export async function loadMessages() {
