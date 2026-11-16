@@ -7,6 +7,19 @@ import { openDrawer } from '../drawer.js'
 const ASKS = ['address', 'motivation', 'timeline', 'condition', 'price', 'occupancy', 'mortgage', 'callback']
 const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
 let call = null   // live test call state
+let cart = { state: 'idle', voices: [] }   // Cartesia voices: idle | loading | ready | off
+async function loadVoices(rerender) {
+  if (cart.state !== 'idle') return
+  if (S.MODE === 'demo') { cart.state = 'off'; return }
+  cart.state = 'loading'
+  try {
+    const r = await fetch('/api/voice/voices', { headers: S.authHeader() })
+    if (!r.ok) throw 0
+    cart = { state: 'ready', voices: (await r.json()).voices || [] }
+  } catch { cart.state = 'off' }
+  rerender()
+}
+const voiceFor = (cfg, lang) => cart.state === 'ready' ? (cfg['voice_' + lang] || cart.voices.find(v => v.language.startsWith(lang))?.id || '') : ''
 
 const fill = (s, c) => String(s || '').replace(/\{\{(\w+)\}\}/g, (_, k) => c[k] ?? '')
 const mmss = s => `${Math.floor((s || 0) / 60)}:${String((s || 0) % 60).padStart(2, '0')}`
@@ -22,6 +35,8 @@ export function voiceView(el) {
         <div class="f"><label>${esc(t('va.greet_en'))}</label><textarea name="greeting_en" rows="2">${esc(c.greeting_en)}</textarea></div>
         <div class="f"><label>${esc(t('va.greet_es'))}</label><textarea name="greeting_es" rows="2">${esc(c.greeting_es)}</textarea></div>
         <div class="f"><label>${esc(t('va.asks'))}</label><div class="va-asks">${ASKS.map(a => `<label class="chk"><input type="checkbox" name="ask" value="${a}" ${c.ask.includes(a) ? 'checked' : ''}> ${esc(t('va.ask_' + a))}</label>`).join('')}</div></div>
+        ${cart.state === 'ready' ? ['en', 'es'].map(l => `<div class="f"><label>${esc(t('va.voice_' + l))}</label><div class="ib-row"><select name="voice_${l}">${cart.voices.filter(v => v.language.startsWith(l)).map(v => `<option value="${esc(v.id)}" ${voiceFor(c, l) === v.id ? 'selected' : ''}>${esc(v.name)}${v.gender ? ' · ' + esc(v.gender) : ''}</option>`).join('')}</select><button type="button" class="btn sm ghost" data-hear="${l}" style="height:40px">${esc(t('va.hear'))}</button></div></div>`).join('')
+          : `<div class="alert" style="font-size:12.5px">${esc(cart.state === 'loading' ? t('va.cart_loading') : t('va.cart_off'))}</div>`}
         <div class="ib-row"><div class="f" style="flex:1"><label>${esc(t('va.hours'))}</label><input name="hours" value="${esc(c.hours)}"></div>
           <div class="f" style="flex:1"><label>${esc(t('va.transfer'))}</label><input name="transfer" value="${esc(c.transfer)}" placeholder="(915) 555-0123"></div></div>
         <div class="f"><label>${esc(t('va.notes'))}</label><textarea name="notes" rows="2" placeholder="${esc(t('va.notes_ph'))}">${esc(c.notes)}</textarea></div>
@@ -36,7 +51,7 @@ export function voiceView(el) {
           <select data-tlang aria-label="${esc(t('va.lang'))}"><option value="en" ${getLang() === 'en' ? 'selected' : ''}>English</option><option value="es" ${getLang() === 'es' ? 'selected' : ''}>Español</option></select>
         </div>
         <div class="va-live" data-live></div>
-        <p class="muted" style="font-size:12px;margin:10px 0 0">${esc(t('va.voice_note'))}</p>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">${esc(cart.state === 'ready' ? t('va.voice_cart') : t('va.voice_note'))}</p>
       </div>
       <div class="card"><h3>${esc(t('va.calls'))}${calls.filter(x => !x.reviewed).length ? `<span class="r pill gold">${calls.filter(x => !x.reviewed).length} ${esc(t('msg.unread'))}</span>` : ''}</h3>
         ${calls.length ? `<div class="va-calls">${calls.map(x => { const p = x.parcelId && S.parcel(x.parcelId); return `<button class="va-row ${x.reviewed ? '' : 'new'}" data-c="${esc(x.id)}">
@@ -51,13 +66,33 @@ export function voiceView(el) {
     const cfg = { ...Object.fromEntries([...fd].filter(([k]) => k !== 'ask')), ask: fd.getAll('ask') }
     await S.saveSettings({ voiceAgent: cfg }); toast(t('org.saved'))
   }
+  el.querySelectorAll('[data-hear]').forEach(b => b.onclick = async () => {
+    const l = b.dataset.hear, sel = el.querySelector(`[name=voice_${l}]`)
+    b.disabled = true
+    try { await speak(fill(l === 'es' ? c.greeting_es : c.greeting_en, c), l, sel.value) } finally { b.disabled = false }
+  })
+  loadVoices(() => { if (document.body.contains(el) && !call) voiceView(el) })
   el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => showCall(b.dataset.c))
   el.querySelector('[data-call]').onclick = () => call ? hangUp(el) : startCall(el)
   if (call) { call.el = el; paintLive(el) }
 }
 
 // ---------- browser test call ----------
-function speak(text, lang) {
+let audio = null
+async function speak(text, lang, voiceId) {
+  const v = voiceId || (cart.state === 'ready' ? voiceFor(S.voiceConfig(), lang) : '')
+  if (v) {
+    try {
+      const r = await fetch('/api/voice/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...S.authHeader() }, body: JSON.stringify({ text, lang, voice: v }) })
+      if (!r.ok) throw 0
+      const url = URL.createObjectURL(await r.blob())
+      await new Promise(res => { audio = new Audio(url); audio.onended = audio.onerror = () => { URL.revokeObjectURL(url); res() }; audio.play().catch(res) })
+      return
+    } catch { /* fall back to the browser voice */ }
+  }
+  return browserSpeak(text, lang)
+}
+function browserSpeak(text, lang) {
   return new Promise(res => {
     const u = new SpeechSynthesisUtterance(text)
     u.lang = lang === 'es' ? 'es-MX' : 'en-US'; u.rate = 1.04
@@ -122,7 +157,7 @@ async function hangUp(el) {
   if (!call) return
   const c = call; c.on = false; call = null
   try { c.rec?.abort() } catch {}
-  speechSynthesis.cancel()
+  speechSynthesis.cancel(); try { audio?.pause() } catch {}
   const transcript = c.lines.map(l => ({ role: l.role, text: l.text }))
   if (transcript.filter(x => x.role === 'caller').length) {
     toast(t('va.saving'))
