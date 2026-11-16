@@ -5,6 +5,7 @@ import { STYLES } from './houses.js'
 import { initCashOffer } from './cashoffer.js'
 import { initInvest } from './invest.js'
 import { initChat } from './chat.js'
+import { initVoiceCall } from './voicecall.js'
 import { wireLeadForms } from './leads.js'
 
 const TEAM = [
@@ -60,6 +61,7 @@ const listings = initListings({ onTour: l => openTour(l) })
 const offer = initCashOffer()
 initInvest()
 initChat()
+initVoiceCall()
 wireLeadForms()
 
 document.getElementById('pathForm').addEventListener('submit', e => {

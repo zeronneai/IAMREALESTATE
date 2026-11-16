@@ -56,7 +56,7 @@ export function voiceView(el) {
       <div class="card"><h3>${esc(t('va.calls'))}${calls.filter(x => !x.reviewed).length ? `<span class="r pill gold">${calls.filter(x => !x.reviewed).length} ${esc(t('msg.unread'))}</span>` : ''}</h3>
         ${calls.length ? `<div class="va-calls">${calls.map(x => { const p = x.parcelId && S.parcel(x.parcelId); return `<button class="va-row ${x.reviewed ? '' : 'new'}" data-c="${esc(x.id)}">
           <span class="pill ${{ hot: 'bad', warm: 'gold', cold: '' }[x.interest] || ''}">${esc(t('va.int_' + (x.interest || 'none')))}</span>
-          <div><b>${esc(x.data?.name || x.phone || t('va.unknown'))}${p ? ` · ${esc(p.address)}` : x.data?.property_address ? ` · ${esc(x.data.property_address)}` : ''}</b><small>${esc((x.summary || '').slice(0, 140))}</small><small class="dim">${esc(x.source === 'test' ? t('va.src_test') : t('va.src_phone'))} · ${esc(date(x.at))} · ${mmss(x.duration)}</small></div></button>` }).join('')}</div>` : `<p class="muted">${esc(t('va.no_calls'))}</p>`}
+          <div><b>${esc(x.data?.name || x.phone || t('va.unknown'))}${p ? ` · ${esc(p.address)}` : x.data?.property_address ? ` · ${esc(x.data.property_address)}` : ''}</b><small>${esc((x.summary || '').slice(0, 140))}</small><small class="dim">${esc(t('va.src_' + (x.source || 'test')))} · ${esc(date(x.at))} · ${mmss(x.duration)}</small></div></button>` }).join('')}</div>` : `<p class="muted">${esc(t('va.no_calls'))}</p>`}
       </div>
     </div></div>`
 

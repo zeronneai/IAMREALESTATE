@@ -22,4 +22,7 @@ drop policy if exists org_read on voice_calls;
 drop policy if exists org_write on voice_calls;
 create policy org_read on voice_calls for select using (org_id = (select current_org()));
 create policy org_write on voice_calls for all using (org_id = (select current_org()) and (select is_team_writer())) with check (org_id = (select current_org()) and (select is_team_writer()));
+-- Calls can also come from the website "Talk to us" button.
+alter table voice_calls drop constraint if exists voice_calls_source_check;
+alter table voice_calls add constraint voice_calls_source_check check (source in ('test','phone','web'));
 notify pgrst, 'reload schema';

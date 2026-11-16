@@ -503,7 +503,7 @@ const D = {
   'va.calls': ['Calls', 'Llamadas'],
   'va.no_calls': ['No calls yet. Try a test call.', 'Todavía no hay llamadas. Haz una llamada de prueba.'],
   'va.unknown': ['Unknown caller', 'Sin nombre'],
-  'va.src_test': ['Test', 'Prueba'], 'va.src_phone': ['Phone', 'Teléfono'],
+  'va.src_test': ['Test', 'Prueba'], 'va.src_phone': ['Phone', 'Teléfono'], 'va.src_web': ['Website', 'Página web'],
   'va.int_hot': ['Hot', 'Caliente'], 'va.int_warm': ['Warm', 'Tibio'], 'va.int_cold': ['Cold', 'Frío'], 'va.int_none': ['New', 'Nueva'],
   'va.saving': ['Saving the call and writing the summary…', 'Guardando la llamada y haciendo el resumen…'],
   'va.transcript': ['Full transcript', 'Transcripción completa'],

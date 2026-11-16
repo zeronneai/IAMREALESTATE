@@ -603,7 +603,13 @@
       <span class="fab-label" data-i18n="chat.fab">Ask IAM</span>
     </button>
     <section class="chat-panel" id="chatPanel" hidden aria-label="IAM Assistant">
-      <header><div><strong data-i18n="chat.title">IAM Assistant</strong><small data-i18n="chat.sub">Replies in English or Spanish</small></div><button type="button" id="chatClose" aria-label="Close">×</button></header>
+      <header><div><strong data-i18n="chat.title">IAM Assistant</strong><small data-i18n="chat.sub">Replies in English or Spanish</small></div><div class="chat-head-acts"><button type="button" class="vc-open" id="vcOpen" data-i18n-title="vc.open" title="Talk to us"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg><span data-i18n="vc.open">Talk to us</span></button><button type="button" id="chatClose" aria-label="Close">×</button></div></header>
+      <div class="vc" id="vc" hidden>
+        <div class="vc-top"><div class="vc-orb" id="vcOrb"><span></span></div><b id="vcName">IAM</b><small id="vcState" data-i18n="vc.ready">Tap to start talking</small></div>
+        <div class="vc-log" id="vcLog" aria-live="polite"></div>
+        <div class="vc-acts"><button type="button" class="vc-btn" id="vcCall" data-i18n="vc.start">Start call</button><button type="button" class="vc-back" id="vcBack" data-i18n="vc.back">Back to chat</button></div>
+        <p class="vc-note" data-i18n="vc.note">You are talking with an AI assistant. A person from our team will follow up.</p>
+      </div>
       <div class="chat-log" id="chatLog" aria-live="polite"></div>
       <div class="chat-quick" id="chatQuick"></div>
       <form class="chat-input" id="chatForm"><input id="chatText" type="text" autocomplete="off" data-i18n-ph="chat.ph" placeholder="Type a message" aria-label="Message" /><button type="submit" aria-label="Send">↑</button></form>

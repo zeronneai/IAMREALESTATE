@@ -268,6 +268,19 @@ export const dict = {
   'chat.fab': ['Ask IAM', 'Pregúntale a IAM'],
   'chat.title': ['IAM Assistant', 'Asistente IAM'],
   'chat.sub': ['Replies in English or Spanish', 'Responde en inglés o español'],
+  'vc.open': ['Talk to us', 'Háblanos'],
+  'vc.ready': ['Tap to start talking', 'Toca para empezar a hablar'],
+  'vc.start': ['Start call', 'Iniciar llamada'],
+  'vc.hang': ['Hang up', 'Colgar'],
+  'vc.back': ['Back to chat', 'Volver al chat'],
+  'vc.listening': ['Listening, go ahead', 'Te escucho, adelante'],
+  'vc.thinking': ['One moment', 'Un momento'],
+  'vc.speaking': ['Speaking', 'Hablando'],
+  'vc.ended': ['Thanks! Our team will call you soon.', '¡Gracias! Nuestro equipo te llamará pronto.'],
+  'vc.no_mic': ['Voice works in Chrome, Edge or Safari. You can also use the chat.', 'La voz funciona en Chrome, Edge o Safari. También puedes usar el chat.'],
+  'vc.mic_denied': ['Allow the microphone to talk with us.', 'Permite el micrófono para hablar con nosotros.'],
+  'vc.busy': ['Voice is not available right now. Please use the chat or call us.', 'La voz no está disponible ahorita. Usa el chat o llámanos.'],
+  'vc.note': ['You are talking with an AI assistant. A person from our team will follow up.', 'Estás hablando con un asistente de IA. Una persona de nuestro equipo te dará seguimiento.'],
   'chat.ph': ['Type a message', 'Escribe un mensaje'],
 }
 
@@ -290,6 +303,7 @@ export function applyLang(next) {
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n) })
   document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml) })
   document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh) })
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle) })
   document.querySelectorAll('[data-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)))
   listeners.forEach(fn => fn(lang))
 }
