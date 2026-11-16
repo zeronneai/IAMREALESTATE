@@ -790,3 +790,12 @@ details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-b
 .pub-add svg { width: 18px; height: 18px; }
 .btn.owned { color: #1f6b38; border-color: rgba(47,138,76,.4); background: #eef7f1; }
 .np-tags { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+
+/* County search */
+.cs-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+@media (max-width: 1100px) { .cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cs-checks { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+.cs-presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; }
+.cs-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.cs-tbl tr.have { opacity: .55; }
+.cs-tbl td.num, .cs-tbl th.num { text-align: right; }

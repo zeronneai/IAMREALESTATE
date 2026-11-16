@@ -769,3 +769,4 @@ export async function moveToInventory(parcelId, { acquiredOn, purchasePrice, reh
   return item
 }
 export const inventoryFor = parcelId => db.inventory.find(v => v.parcelId === parcelId) || null
+export const touch = () => { persist(); emit() }

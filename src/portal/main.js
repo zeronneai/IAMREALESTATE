@@ -8,6 +8,7 @@ import { dashboard } from './views/dashboard.js'
 import { leads } from './views/leads.js'
 import { lists } from './views/lists.js'
 import { inbox } from './views/inbox.js'
+import { countyView } from './views/county.js'
 import { sequencesView } from './views/sequences.js'
 import { voiceView } from './views/voice.js'
 import { inventoryView } from './views/inventory.js'
@@ -20,6 +21,7 @@ const ROUTES = {
   dashboard: { icon: 'dashboard', render: el => dashboard(el) },
   foreclosures: { icon: 'foreclosures', render: (el, q) => leads(el, 'foreclosures', q), count: () => S.parcels().filter(p => p.foreclosure && p._d.daysToSale >= 0).length },
   properties: { icon: 'properties', render: (el, q) => leads(el, 'properties', q), count: () => S.parcels().length },
+  county: { icon: 'search', render: el => countyView(el), still: true },
   inbox: { icon: 'inbox', render: el => inbox(el), still: true, count: () => S.unreadCount() || '' },
   sequences: { icon: 'route', render: el => sequencesView(el), count: () => S.enrollments().filter(e => e.status === 'active').length || '' },
   voice: { icon: 'phone', render: el => voiceView(el), still: true, count: () => S.voiceCalls().filter(c => !c.reviewed).length || '' },
