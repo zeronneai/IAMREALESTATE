@@ -51,3 +51,64 @@ export function twilioValid(signature, url, params, token = process.env.TWILIO_A
   const a = Buffer.from(expected), b = Buffer.from(String(signature))
   return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
+
+const niceCase = s => String(s || '').toLowerCase().replace(/(^|[\s\-'/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
+// Fill {{first}}, {{owner}}, {{address}}, {{agent}}, {{company}}, {{phone}} in a template.
+export function fillTemplate(tpl, { owners = [], address = '', sender = {}, company = '', lang = 'en' } = {}) {
+  const names = owners.map(o => niceCase(o.name || o)).filter(Boolean)
+  const first = (names[0] || '').split(/\s+/)[0] || (lang === 'es' ? 'buen día' : 'there')
+  const vals = { first, owner: names.slice(0, 2).join(' & '), address: niceCase(address), agent: sender.agent || '', company: company || sender.company || '', phone: sender.phone || '' }
+  return String(tpl || '').replace(/\{\{(\w+)\}\}/g, (_, k) => vals[k] ?? '')
+}
+
+// Send every follow-up step that is due. orgId limits it to one company (manual "run now"); null runs all.
+export async function runDueSteps({ orgId = null, now = new Date(), limit = 300, host = null } = {}) {
+  const db = sb(); if (!db.ok) return { ok: false, error: 'not_configured' }
+  const out = { sent: 0, skipped: 0, done: 0, errors: [] }
+  const quiet = inQuietHours(now)
+  const q = `enrollments?status=eq.active&next_at=lte.${encodeURIComponent(now.toISOString())}${orgId ? `&org_id=eq.${orgId}` : ''}&order=next_at.asc&limit=${limit}` +
+    `&select=id,org_id,step,phone,email,parcel_id,sequences(name,steps,active),parcels(address,owners(name)),orgs(name,active,sms_number,email_from,reply_to)`
+  const r = await db.rest(q); if (!r.ok) return { ok: false, error: 'db' }
+  const rows = await r.json()
+  const senders = {}
+  for (const e of rows) {
+    const steps = e.sequences?.steps || [], st = steps[e.step]
+    if (!e.orgs?.active || !e.sequences?.active) { out.skipped++; continue }
+    if (!st) { await db.rest(`enrollments?id=eq.${e.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) }); out.done++; continue }
+    if (st.channel === 'sms' && quiet) { out.skipped++; continue }
+    if (!(e.org_id in senders)) { const s = (await (await db.rest(`settings?org_id=eq.${e.org_id}&key=eq.mailSender&select=value`)).json())?.[0]?.value || {}; senders[e.org_id] = s }
+    const peer = st.channel === 'sms' ? e164(e.phone) : (isEmail(e.email) ? e.email.toLowerCase() : null)
+    let err = null, sent = null
+    if (!peer) err = st.channel === 'sms' ? 'no_phone' : 'no_email'
+    else {
+      const opt = await (await db.rest(`opt_outs?org_id=eq.${e.org_id}&channel=eq.${st.channel}&peer=eq.${encodeURIComponent(peer)}&select=peer`)).json()
+      if (opt?.length) { await db.rest(`enrollments?id=eq.${e.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'opted_out' }) }); out.skipped++; continue }
+      const body = fillTemplate(st.body, { owners: e.parcels?.owners || [], address: e.parcels?.address, sender: senders[e.org_id], company: e.orgs.name })
+      if (st.channel === 'sms') sent = e.orgs.sms_number ? await sendSms({ from: e.orgs.sms_number, to: peer, body, statusCallback: host ? `https://${host}/api/outreach/inbound?status=1` : undefined }) : { ok: false, error: 'no_number' }
+      else {
+        const subject = fillTemplate(st.subject || e.orgs.name, { owners: e.parcels?.owners || [], address: e.parcels?.address, sender: senders[e.org_id], company: e.orgs.name })
+        sent = e.orgs.email_from ? await sendEmail({ from: e.orgs.email_from, to: peer, subject, body, replyTo: e.orgs.reply_to || undefined }) : { ok: false, error: 'no_email' }
+      }
+      if (sent.ok) {
+        await db.rest('messages', { method: 'POST', body: JSON.stringify({ org_id: e.org_id, parcel_id: e.parcel_id, channel: st.channel, direction: 'out', peer, subject: st.channel === 'email' ? (st.subject || null) : null, body, status: sent.status, provider_id: sent.id || null, read: true }) })
+        out.sent++
+      } else err = sent.error
+    }
+    // A missing number or email skips that step; sending errors also move on so one owner never blocks the queue.
+    const next = e.step + 1, ns = steps[next]
+    const patch = ns ? { step: next, next_at: new Date(now.getTime() + Math.max(0, (+ns.day || 0) - (+st.day || 0)) * 86400e3).toISOString(), last_error: err } : { step: next, status: 'done', last_error: err }
+    await db.rest(`enrollments?id=eq.${e.id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+    if (err) out.errors.push(err)
+    if (!ns) out.done++
+  }
+  return { ok: true, ...out }
+}
+
+// Called when an owner replies: stop their follow ups in that company.
+export async function stopOnReply(orgId, peer, channel) {
+  const db = sb(); if (!db.ok) return
+  const col = channel === 'sms' ? 'phone' : 'email'
+  const rows = await (await db.rest(`enrollments?org_id=eq.${orgId}&status=eq.active&select=id,${col},sequences(stop_on_reply)`)).json()
+  const hit = (rows || []).filter(e => e.sequences?.stop_on_reply !== false && (channel === 'sms' ? e164(e.phone) === peer : String(e.email || '').toLowerCase() === peer))
+  for (const e of hit) await db.rest(`enrollments?id=eq.${e.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'replied' }) })
+}

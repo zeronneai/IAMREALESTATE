@@ -23,6 +23,12 @@
     },
     "api/cron/epcad.js": {
       "maxDuration": 300
+    },
+    "api/cron/sequences.js": {
+      "maxDuration": 300
+    },
+    "api/outreach/run.js": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -33,6 +39,10 @@
     {
       "path": "/api/cron/epcad",
       "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/cron/sequences",
+      "schedule": "0 16 * * *"
     }
   ]
 }

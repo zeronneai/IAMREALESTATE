@@ -34,10 +34,37 @@ create table if not exists opt_outs (
   primary key (org_id, channel, peer)
 );
 
+-- Automatic follow ups: a sequence of steps (day, channel, text). Owners are enrolled and get each step on its day.
+create table if not exists sequences (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null default default_org() references orgs(id) on delete cascade,
+  name text not null,
+  steps jsonb not null default '[]',      -- [{ "day": 0, "channel": "sms", "subject": "", "body": "Hi {{first}}..." }]
+  active boolean not null default true,
+  stop_on_reply boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create table if not exists enrollments (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null default default_org() references orgs(id) on delete cascade,
+  sequence_id uuid not null references sequences(id) on delete cascade,
+  parcel_id uuid not null references parcels(id) on delete cascade,
+  phone text,
+  email text,
+  step int not null default 0,
+  next_at timestamptz not null default now(),
+  status text not null default 'active' check (status in ('active','done','stopped','replied','opted_out','failed')),
+  last_error text,
+  created_by uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  unique (sequence_id, parcel_id)
+);
+create index if not exists enrollments_due_idx on enrollments(status, next_at);
+
 do $$
 declare t text;
 begin
-  foreach t in array array['messages','opt_outs'] loop
+  foreach t in array array['messages','opt_outs','sequences','enrollments'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists org_read on %I', t);
     execute format('drop policy if exists org_write on %I', t);

@@ -51,6 +51,7 @@ function render(dr) {
     <div class="links" style="margin-top:12px">
       <button class="btn gold sm" data-skip>${icon('phone')}${esc(t('d.skip'))}</button>
       ${(p.contacts || []).length ? `<button class="btn sm" data-msg>${icon('inbox')}${esc(t('msg.button'))}</button>` : ''}
+      ${(p.contacts || []).length ? `<button class="btn sm" data-seq>${esc(t('sel.seq'))}</button>` : ''}
       <button class="btn sm" data-list>${esc(t('sel.add'))}</button>
       <a class="btn sm ghost" href="${gmaps}" target="_blank" rel="noopener">${esc(t('d.maps'))}</a>
       <button class="btn sm ghost" data-epm>${esc(t('d.epcad_match'))}</button>
@@ -149,6 +150,7 @@ function render(dr) {
   $('[data-x]', dr).onclick = closeDrawer
   dr.querySelectorAll('[data-ph]').forEach(fg => fg.onclick = () => photoBox(p, fg.dataset.ph))
   dr.querySelectorAll('[data-sms]').forEach(b => b.onclick = () => { closeDrawer(); startConversation(p.id, b.dataset.sms) })
+  $('[data-seq]', dr)?.addEventListener('click', () => import('./views/sequences.js').then(m => m.enrollModal([p.id])))
   $('[data-msg]', dr)?.addEventListener('click', () => { closeDrawer(); startConversation(p.id) })
   $('[data-skip]', dr).onclick = () => skipTrace([p.id])
   $('[data-list]', dr).onclick = () => pickList([p.id])

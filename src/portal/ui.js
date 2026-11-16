@@ -85,7 +85,7 @@ export function renderBatch() {
     <button class="btn" data-act="export">${esc(t('sel.export'))}</button>
     <button class="btn" data-act="mail">${esc(t('sel.mail'))}</button>
     <button class="btn" data-act="route">${esc(t('sel.route'))}</button>
-    <button class="btn" data-act="crm">${esc(t('sel.crm'))}</button>
+    <button class="btn" data-act="seq">${esc(t('sel.seq'))}</button>
     <button class="btn" data-act="copy">${esc(t('sel.copy'))}</button>
     <button class="btn" data-act="clear">${esc(t('sel.clear'))}</button>`
   bar.classList.toggle('show', selection.size > 0)
@@ -106,6 +106,7 @@ export async function batchAction(act, ids) {
   if (act === 'copy') return copyRows(ids)
   if (act === 'skip') return skipTrace(ids)
   if (act === 'crm') return pushCRM(ids)
+  if (act === 'seq') return import('./views/sequences.js').then(m => m.enrollModal(ids))
   if (act === 'mail') return import('./views/mailer.js').then(m => m.openMailer(ids))
   if (act === 'route') { routeIds.splice(0, routeIds.length, ...ids); location.hash = '#/route'; return }
 }

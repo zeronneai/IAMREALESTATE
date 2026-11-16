@@ -1,6 +1,6 @@
 // Twilio webhook. Set it on each company number: "A message comes in" -> POST https://<portal>/api/outreach/inbound
 // Also receives delivery status updates (?status=1). Replies land in Conversations; STOP opts the number out.
-import { e164, STOP_WORDS, START_WORDS, sb, twilioValid } from '../_lib/outreach.js'
+import { e164, STOP_WORDS, START_WORDS, sb, twilioValid, stopOnReply } from '../_lib/outreach.js'
 
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'text/xml')
@@ -23,6 +23,7 @@ export default async function handler(req, res) {
   if (!org) return empty()
   const last = (await (await db.rest(`messages?org_id=eq.${org}&peer=eq.${encodeURIComponent(from)}&parcel_id=not.is.null&select=parcel_id&order=created_at.desc&limit=1`)).json())?.[0]
   await db.rest('messages', { method: 'POST', body: JSON.stringify({ org_id: org, parcel_id: last?.parcel_id || null, channel: 'sms', direction: 'in', peer: from, body: text || '(media)', status: 'received', provider_id: p.MessageSid || null, read: false }) })
+  await stopOnReply(org, from, 'sms')
   if (STOP_WORDS.test(text)) await db.rest('opt_outs', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates' }, body: JSON.stringify({ org_id: org, channel: 'sms', peer: from }) })
   else if (START_WORDS.test(text)) await db.rest(`opt_outs?org_id=eq.${org}&channel=eq.sms&peer=eq.${encodeURIComponent(from)}`, { method: 'DELETE' })
   return empty()

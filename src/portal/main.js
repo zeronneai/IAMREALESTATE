@@ -8,6 +8,7 @@ import { dashboard } from './views/dashboard.js'
 import { leads } from './views/leads.js'
 import { lists } from './views/lists.js'
 import { inbox } from './views/inbox.js'
+import { sequencesView } from './views/sequences.js'
 import { inventoryView } from './views/inventory.js'
 import { mortgages } from './views/mortgages.js'
 import { importer } from './views/importer.js'
@@ -19,6 +20,7 @@ const ROUTES = {
   foreclosures: { icon: 'foreclosures', render: (el, q) => leads(el, 'foreclosures', q), count: () => S.parcels().filter(p => p.foreclosure && p._d.daysToSale >= 0).length },
   properties: { icon: 'properties', render: (el, q) => leads(el, 'properties', q), count: () => S.parcels().length },
   inbox: { icon: 'inbox', render: el => inbox(el), still: true, count: () => S.unreadCount() || '' },
+  sequences: { icon: 'route', render: el => sequencesView(el), count: () => S.enrollments().filter(e => e.status === 'active').length || '' },
   lists: { icon: 'lists', render: el => lists(el), count: () => S.lists().length },
   inventory: { icon: 'inventory', render: el => inventoryView(el), count: () => S.inventory().length },
   mortgages: { icon: 'mortgages', render: el => mortgages(el) },

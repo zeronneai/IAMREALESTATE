@@ -64,6 +64,7 @@ export async function init() {
   await loadRole()
   await loadRemote()
   loadMessages().catch(() => {})
+  loadSequences().catch(() => {})
   setInterval(() => { if (!document.hidden) loadMessages().catch(() => {}) }, 30000)
   return { ready: true }
 }
@@ -563,4 +564,93 @@ export const DEFAULT_SMS = {
     { name: 'Seguimiento', body: 'Hola {{first}}, le doy seguimiento sobre {{address}}. Compramos como está, cerramos cuando usted quiera y cubrimos los gastos de cierre. ¿Le mando una cifra?' },
     { name: 'Cita', body: '¡Gracias {{first}}! ¿Le queda bien mañana para ver {{address}} rápido? ¿En la mañana o en la tarde?' },
   ],
+}
+
+// ---------- automatic follow ups (sequences) ----------
+let seqs = [], enrs = []
+const seqRow = r => ({ id: r.id, name: r.name, steps: r.steps || [], active: r.active !== false, stopOnReply: r.stop_on_reply !== false, at: r.created_at })
+const enrRow = r => ({ id: r.id, sequenceId: r.sequence_id, parcelId: r.parcel_id, phone: r.phone, email: r.email, step: r.step, nextAt: r.next_at, status: r.status, error: r.last_error, at: r.created_at })
+export const DEFAULT_SEQUENCES = [
+  { name: 'Foreclosure · 3 touches', steps: [
+    { day: 0, channel: 'sms', body: 'Hi {{first}}, this is {{agent}} with {{company}}. I saw your property at {{address}} and wanted to ask if you have ever thought about selling. Any interest in a cash offer?' },
+    { day: 3, channel: 'sms', body: 'Hi {{first}}, following up about {{address}}. We buy as is, close on your timeline and cover closing costs. Want me to send you a number?' },
+    { day: 7, channel: 'email', subject: 'Your property at {{address}}', body: 'Hi {{first}},\n\nI reached out by text about {{address}}. If selling could help, we can make a cash offer, buy as is and close before the sale date.\n\nReply to this email or call me at {{phone}}.\n\n{{agent}}\n{{company}}' },
+  ] },
+  { name: 'Ejecución · 3 toques (ES)', steps: [
+    { day: 0, channel: 'sms', body: 'Hola {{first}}, soy {{agent}} de {{company}}. Vi su propiedad en {{address}}. ¿Ha pensado en venderla? Compramos en efectivo y como está.' },
+    { day: 3, channel: 'sms', body: 'Hola {{first}}, le doy seguimiento sobre {{address}}. Cerramos cuando usted quiera y cubrimos los gastos de cierre. ¿Le mando una cifra?' },
+    { day: 7, channel: 'email', subject: 'Su propiedad en {{address}}', body: 'Hola {{first}},\n\nLe escribí por mensaje sobre {{address}}. Si vender le ayuda, podemos hacer una oferta en efectivo, comprar como está y cerrar antes de la fecha de subasta.\n\nResponda este correo o llámeme al {{phone}}.\n\n{{agent}}\n{{company}}' },
+  ] },
+]
+function demoSeq() {
+  if (!db.sequences) {
+    db.sequences = DEFAULT_SEQUENCES.map((s, i) => ({ id: 'q-' + (i + 1), ...s, active: true, stopOnReply: true, at: new Date().toISOString() }))
+    const ps = db.parcels.filter(p => (p.contacts || []).some(c => c.kind === 'phone' && !c.dnc)).slice(4, 9)
+    const day = 86400e3
+    db.enrollments = ps.map((p, i) => ({ id: 'n-' + i, sequenceId: 'q-1', parcelId: p.id, phone: p.contacts.find(c => c.kind === 'phone' && !c.dnc).value, email: p.contacts.find(c => c.kind === 'email')?.value || null, step: i % 3, nextAt: new Date(Date.now() + ((i % 3) + 1) * day).toISOString(), status: i === 4 ? 'replied' : 'active', at: new Date(Date.now() - (i + 1) * day).toISOString() }))
+  }
+  return db
+}
+export const sequences = () => (MODE === 'demo' ? demoSeq().sequences : seqs)
+export const enrollments = () => (MODE === 'demo' ? demoSeq().enrollments : enrs)
+export async function loadSequences() {
+  if (!sb) return
+  const [a, b] = await Promise.all([sb.from('sequences').select('*').order('created_at'), sb.from('enrollments').select('*').order('created_at', { ascending: false }).limit(3000)])
+  if (a.error) return
+  seqs = (a.data || []).map(seqRow); enrs = (b.data || []).map(enrRow)
+  if (!seqs.length) { for (const s of DEFAULT_SEQUENCES) await saveSequence({ ...s, active: true, stopOnReply: true }, { silent: true }); return loadSequences() }
+  emit()
+}
+export async function saveSequence(s, { silent = false } = {}) {
+  const row = { name: s.name, steps: s.steps, active: s.active !== false, stop_on_reply: s.stopOnReply !== false }
+  if (MODE === 'demo') { const l = demoSeq().sequences; const ex = l.find(x => x.id === s.id); if (ex) Object.assign(ex, s); else l.push({ ...s, id: uid('q'), at: new Date().toISOString() }); persist(); emit(); return }
+  if (s.id) { const { error } = await sb.from('sequences').update(row).eq('id', s.id); if (error) throw new Error(t('team.e_error')) }
+  else { const { error } = await sb.from('sequences').insert(row); if (error) throw new Error(t('team.e_error')) }
+  if (!silent) await loadSequences()
+}
+export async function deleteSequence(id) {
+  if (MODE === 'demo') { db.sequences = db.sequences.filter(x => x.id !== id); db.enrollments = db.enrollments.filter(x => x.sequenceId !== id); persist(); emit(); return }
+  await sb.from('sequences').delete().eq('id', id); await loadSequences()
+}
+// Enroll properties: first phone not on Do Not Call and first email. Returns { added, skipped }.
+export async function enroll(seqId, ids, isBlocked = () => false) {
+  const seq = sequences().find(s => s.id === seqId); if (!seq) return { added: 0, skipped: ids.length }
+  const already = new Set(enrollments().filter(e => e.sequenceId === seqId).map(e => e.parcelId))
+  const rows = []
+  let skipped = 0
+  for (const id of ids) {
+    const p = parcel(id); if (!p || already.has(id)) { skipped++; continue }
+    const phone = (p.contacts || []).find(c => c.kind === 'phone' && !c.dnc && !isBlocked(c.value))?.value || null
+    const email = (p.contacts || []).find(c => c.kind === 'email')?.value || null
+    const needs = new Set(seq.steps.map(s => s.channel))
+    if (!(needs.has('sms') && phone) && !(needs.has('email') && email)) { skipped++; continue }
+    rows.push({ parcelId: id, phone, email })
+  }
+  const first = +(seq.steps[0]?.day || 0)
+  const nextAt = new Date(Date.now() + first * 86400e3).toISOString()
+  if (MODE === 'demo') {
+    for (const r of rows) {
+      demoSeq().enrollments.unshift({ id: uid('n'), sequenceId: seqId, ...r, step: first === 0 ? 1 : 0, nextAt: seq.steps[1] ? new Date(Date.now() + (+seq.steps[1].day - first) * 86400e3).toISOString() : nextAt, status: first === 0 && !seq.steps[1] ? 'done' : 'active', at: new Date().toISOString() })
+      const st = seq.steps[0], to = st.channel === 'sms' ? r.phone : r.email
+      if (first === 0 && to) demoMsgs().push({ id: uid('m'), parcelId: r.parcelId, channel: st.channel, dir: 'out', peer: to, subject: st.subject || '', body: fillDemo(st.body, parcel(r.parcelId)), status: 'delivered', read: true, at: new Date().toISOString() })
+    }
+    persist(); emit(); return { added: rows.length, skipped }
+  }
+  if (rows.length) {
+    const { error } = await sb.from('enrollments').insert(rows.map(r => ({ sequence_id: seqId, parcel_id: r.parcelId, phone: r.phone, email: r.email, next_at: nextAt })))
+    if (error) throw new Error(t('team.e_error'))
+    if (first === 0) await fetch('/api/outreach/run', { method: 'POST', headers: authHeader() }).catch(() => {})
+    await Promise.all([loadSequences(), loadMessages()])
+  }
+  return { added: rows.length, skipped }
+}
+export async function stopEnrollment(id) {
+  if (MODE === 'demo') { const e = demoSeq().enrollments.find(x => x.id === id); if (e) e.status = 'stopped'; persist(); emit(); return }
+  await sb.from('enrollments').update({ status: 'stopped' }).eq('id', id); await loadSequences()
+}
+function fillDemo(tpl, p) {
+  const s = { ...{ company: 'I AM Real Estate', agent: 'Angeline Gomez', phone: '(915) 348-3560' }, ...(db.settings.mailSender || {}) }
+  const first = String(p?.owners?.[0]?.name || '').split(/\s+/)[0].toLowerCase().replace(/^./, c => c.toUpperCase()) || 'there'
+  const vals = { first, owner: p?.owners?.[0]?.name || '', address: String(p?.address || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()), agent: s.agent, company: s.company, phone: s.phone }
+  return String(tpl).replace(/\{\{(\w+)\}\}/g, (_, k) => vals[k] ?? '')
 }
