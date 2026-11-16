@@ -68,6 +68,7 @@ export function voiceView(el) {
   }
   el.querySelectorAll('[data-hear]').forEach(b => b.onclick = async () => {
     const l = b.dataset.hear, sel = el.querySelector(`[name=voice_${l}]`)
+    unlockAudio(); stopAudio()
     b.disabled = true
     try { await speak(fill(l === 'es' ? c.greeting_es : c.greeting_en, c), l, sel.value) } finally { b.disabled = false }
   })
@@ -78,15 +79,34 @@ export function voiceView(el) {
 }
 
 // ---------- browser test call ----------
-let audio = null
+// Chrome only lets a page play sound right after a click. We open one audio channel when the call button is
+// pressed (or Listen) and reuse it for every answer, so later replies are not silently blocked.
+let actx = null, playing = null
+function unlockAudio() {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)()
+    if (actx.state !== 'running') actx.resume()
+    const b = actx.createBuffer(1, 1, 22050), src = actx.createBufferSource(); src.buffer = b; src.connect(actx.destination); src.start(0)
+  } catch {}
+  try { speechSynthesis.speak(new SpeechSynthesisUtterance('')) } catch {}
+}
+function stopAudio() { try { playing?.stop() } catch {} playing = null; try { speechSynthesis.cancel() } catch {} }
 async function speak(text, lang, voiceId) {
   const v = voiceId || (cart.state === 'ready' ? voiceFor(S.voiceConfig(), lang) : '')
-  if (v) {
+  if (v && actx) {
     try {
       const r = await fetch('/api/voice/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...S.authHeader() }, body: JSON.stringify({ text, lang, voice: v }) })
       if (!r.ok) throw 0
-      const url = URL.createObjectURL(await r.blob())
-      await new Promise(res => { audio = new Audio(url); audio.onended = audio.onerror = () => { URL.revokeObjectURL(url); res() }; audio.play().catch(res) })
+      const buf = await actx.decodeAudioData(await r.arrayBuffer())
+      if (actx.state !== 'running') await actx.resume()
+      await new Promise(res => {
+        const src = actx.createBufferSource(); src.buffer = buf; src.connect(actx.destination)
+        playing = src
+        const guard = setTimeout(res, (buf.duration + 2) * 1000)
+        src.onended = () => { clearTimeout(guard); res() }
+        src.start(0)
+      })
+      playing = null
       return
     } catch { /* fall back to the browser voice */ }
   }
@@ -98,7 +118,8 @@ function browserSpeak(text, lang) {
     u.lang = lang === 'es' ? 'es-MX' : 'en-US'; u.rate = 1.04
     const vs = speechSynthesis.getVoices().filter(v => v.lang.startsWith(lang === 'es' ? 'es' : 'en'))
     u.voice = vs.find(v => /natural|neural|google|samantha|paulina|monica/i.test(v.name)) || vs[0] || null
-    u.onend = u.onerror = () => res()
+    const guard = setTimeout(res, 4000 + text.length * 90)
+    u.onend = u.onerror = () => { clearTimeout(guard); res() }
     speechSynthesis.cancel(); speechSynthesis.speak(u)
   })
 }
@@ -122,6 +143,7 @@ function paintLive(el) {
   if (sub) sub.textContent = call.phase === 'listening' ? t('va.talk_now') : ''
 }
 async function startCall(el) {
+  unlockAudio()
   const lang = el.querySelector('[data-tlang]').value
   const cfg = S.voiceConfig()
   call = { el, lang, cfg, lines: [], msgs: [], startedAt: new Date().toISOString(), phase: 'speaking', partial: '', on: true }
@@ -157,7 +179,7 @@ async function hangUp(el) {
   if (!call) return
   const c = call; c.on = false; call = null
   try { c.rec?.abort() } catch {}
-  speechSynthesis.cancel(); try { audio?.pause() } catch {}
+  stopAudio()
   const transcript = c.lines.map(l => ({ role: l.role, text: l.text }))
   if (transcript.filter(x => x.role === 'caller').length) {
     toast(t('va.saving'))
