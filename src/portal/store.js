@@ -66,6 +66,7 @@ export async function init() {
   loadMessages().catch(() => {})
   loadSequences().catch(() => {})
   loadVoiceCalls().catch(() => {})
+  loadFinance().catch(() => {})
   setInterval(() => { if (!document.hidden) loadMessages().catch(() => {}) }, 30000)
   return { ready: true }
 }
@@ -790,4 +791,111 @@ export async function reverseGeocode(lat, lng) {
   const j = await r.json().catch(() => ({}))
   if (!r.ok) { const e = new Error(j.code || 'not_found'); e.code = j.code; throw e }
   return j
+}
+
+// ---------- portfolio & finance: recurring payments and what was paid ----------
+let obls = [], pays = []
+const oblRow = r => ({ id: r.id, invId: r.inventory_id, kind: r.kind, dir: r.direction, party: r.party || '', amount: +r.amount || 0, freq: r.frequency, dueDay: r.due_day, dueDate: r.due_date, grace: r.grace_days ?? 5, autopay: !!r.autopay, account: r.account || '', payUrl: r.pay_url || '', active: r.active !== false, notes: r.notes || '' })
+const payRow = r => ({ id: r.id, oblId: r.obligation_id, period: r.period, dueDate: r.due_date, amountDue: +r.amount_due || 0, paid: +r.amount_paid || 0, lateFee: +r.late_fee || 0, paidOn: r.paid_on, method: r.method || '', reference: r.reference || '', status: r.status, notes: r.notes || '' })
+const ym = d => d.slice(0, 7)
+export const monthStart = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+function demoFin() {
+  if (!db.obligations) {
+    const o = [], p = [], now = new Date(), m0 = monthStart(now)
+    const shift = (k) => { const d = new Date(now.getFullYear(), now.getMonth() + k, 1); return monthStart(d) }
+    db.inventory.forEach((v, i) => {
+      if (v.status === 'sold') return
+      if (v.status === 'rented' || i % 2 === 0) o.push({ id: 'ob-r' + i, invId: v.id, kind: 'rent', dir: 'in', party: v.tenant || ['Maria Lopez', 'J. Hernandez', 'The Carters'][i % 3], amount: v.rent || 1450 + i * 75, freq: 'monthly', dueDay: 1, dueDate: shift(-3), grace: 5, autopay: false, active: true, account: '', payUrl: '', notes: '' })
+      o.push({ id: 'ob-m' + i, invId: v.id, kind: 'mortgage', dir: 'out', party: v.mortgage?.lender || ['Rocket Mortgage', 'Mr. Cooper', 'GECU'][i % 3], amount: v.mortgage?.payment || 980 + i * 60, freq: 'monthly', dueDay: v.mortgage?.dueDay || 1, dueDate: shift(-3), grace: 15, autopay: i % 3 === 0, account: '••' + (4100 + i * 7), payUrl: '', active: true, notes: '' })
+      if (i % 2 === 1) o.push({ id: 'ob-i' + i, invId: v.id, kind: 'insurance', dir: 'out', party: 'State Farm', amount: 640, freq: 'yearly', dueDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-20`, grace: 0, autopay: false, active: true, account: '', payUrl: '', notes: '' })
+    })
+    o.push({ id: 'ob-u1', invId: db.inventory[0]?.id || null, kind: 'utility', dir: 'out', party: 'El Paso Water', amount: 86, freq: 'monthly', dueDay: 18, dueDate: shift(-3), grace: 3, autopay: false, active: true, account: '', payUrl: 'https://www.epwater.org', notes: '' })
+    o.push({ id: 'ob-b1', invId: null, kind: 'repair', dir: 'out', party: 'Sun City Roofing', amount: 2400, freq: 'once', dueDate: `${m0.slice(0, 8)}25`, grace: 0, autopay: false, active: true, account: '', payUrl: '', notes: 'Invoice #1182 roof repair' })
+    // Paid history: last 3 months mostly paid; this month a mix.
+    for (const ob of o) for (const k of [-3, -2, -1, 0]) {
+      const per = shift(k); if (!applies(ob, per)) continue
+      const skip = k === 0 ? ob.id.endsWith('2') || ob.id.endsWith('5') || ob.kind === 'utility' || ob.kind === 'repair' || ob.kind === 'insurance' : k === -1 && ob.id === 'ob-r4'
+      if (skip) continue
+      const due = dueOn(ob, per)
+      p.push({ id: uid('pay'), oblId: ob.id, period: per, dueDate: due, amountDue: ob.amount, paid: ob.amount, lateFee: 0, paidOn: due, method: ob.dir === 'in' ? 'RentRedi' : ob.autopay ? 'Autopay' : 'ACH', reference: '', status: 'paid', notes: '' })
+    }
+    db.obligations = o; db.payments = p
+  }
+  return db
+}
+export const obligations = () => (MODE === 'demo' ? demoFin().obligations : obls)
+export const payments = () => (MODE === 'demo' ? demoFin().payments : pays)
+export async function loadFinance() {
+  if (!sb) return
+  const [a, b] = await Promise.all([sb.from('obligations').select('*'), sb.from('payments').select('*').gte('period', monthStart(new Date(Date.now() - 400 * 86400e3)))])
+  if (a.error) return
+  obls = (a.data || []).map(oblRow); pays = (b.data || []).map(payRow); emit()
+}
+// Does an obligation fall in this period (YYYY-MM-01)?
+export function applies(ob, period) {
+  if (!ob.active && !payments().some(x => x.oblId === ob.id && x.period === period)) return false
+  const start = ob.dueDate ? ob.dueDate.slice(0, 7) + '-01' : null
+  if (ob.freq === 'once') return !!start && ym(start) === ym(period)
+  if (start && period < start) return false
+  if (ob.freq === 'monthly') return true
+  const mm = s => +s.slice(0, 4) * 12 + +s.slice(5, 7)
+  const base = start || period
+  if (ob.freq === 'quarterly') return (mm(period) - mm(base)) % 3 === 0
+  if (ob.freq === 'yearly') return (mm(period) - mm(base)) % 12 === 0
+  return false
+}
+export function dueOn(ob, period) {
+  const y = +period.slice(0, 4), m = +period.slice(5, 7), last = new Date(y, m, 0).getDate()
+  const day = Math.min(ob.freq === 'monthly' && ob.dueDay ? ob.dueDay : ob.dueDate ? +ob.dueDate.slice(8, 10) : (ob.dueDay || 1), last)
+  return `${period.slice(0, 8)}${String(day).padStart(2, '0')}`
+}
+const today = () => new Date().toISOString().slice(0, 10)
+const addDays = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10) }
+// Everything due in a month, with its status: paid, partial, waived, late, due (due today or in grace), upcoming.
+export function periodItems(period) {
+  const out = []
+  for (const ob of obligations()) {
+    if (!applies(ob, period)) continue
+    const due = dueOn(ob, period), pay = payments().find(x => x.oblId === ob.id && x.period === period) || null
+    let status = pay ? pay.status : today() > addDays(due, ob.grace || 0) ? 'late' : today() >= due ? 'due' : 'upcoming'
+    if (!pay && ob.autopay && today() >= due && ob.dir === 'out') status = 'autopay'
+    out.push({ ob, inv: ob.invId ? db.inventory.find(v => v.id === ob.invId) || null : null, period, due, amount: ob.amount, pay, status })
+  }
+  return out.sort((a, b) => a.due.localeCompare(b.due))
+}
+export async function saveObligation(ob) {
+  if (!ob.dueDate) { const d = (+ob.dueDay || 1); const m0 = monthStart(); ob = { ...ob, dueDate: `${m0.slice(0, 8)}${String(Math.min(d, 28)).padStart(2, '0')}` } }
+  const row = { inventory_id: isUuid(ob.invId) ? ob.invId : null, kind: ob.kind, direction: ob.dir || (ob.kind === 'rent' ? 'in' : 'out'), party: ob.party || null, amount: +ob.amount || 0, frequency: ob.freq || 'monthly', due_day: ob.freq === 'monthly' ? (+ob.dueDay || 1) : null, due_date: ob.dueDate || null, grace_days: ob.grace === '' || ob.grace == null ? 5 : +ob.grace, autopay: !!ob.autopay, account: ob.account || null, pay_url: ob.payUrl || null, active: ob.active !== false, notes: ob.notes || null }
+  const clean = { ...ob, dir: row.direction, amount: row.amount, dueDay: row.due_day, grace: row.grace_days }
+  if (MODE === 'demo' || !sb) { const l = demoFin().obligations; const ex = l.find(x => x.id === ob.id); if (ex) Object.assign(ex, clean); else l.push({ ...clean, id: uid('ob') }); persist(); emit(); return }
+  const q = ob.id && isUuid(ob.id) ? sb.from('obligations').update(row).eq('id', ob.id) : sb.from('obligations').insert(row)
+  const { error } = await q
+  if (error) throw new Error(/relation|schema cache|column/i.test(error.message) ? t('pf.e_sql') : t('team.e_error'))
+  await loadFinance()
+}
+export async function deleteObligation(id) {
+  if (MODE === 'demo' || !sb) { db.obligations = demoFin().obligations.filter(x => x.id !== id); db.payments = db.payments.filter(x => x.oblId !== id); persist(); emit(); return }
+  await sb.from('obligations').delete().eq('id', id); await loadFinance()
+}
+export async function recordPayment(it, f) {
+  const row = { obligation_id: it.ob.id, period: it.period, due_date: it.due, amount_due: it.amount, amount_paid: +f.paid || 0, late_fee: +f.lateFee || 0, paid_on: f.paidOn || today(), method: f.method || null, reference: f.reference || null, status: f.status || ((+f.paid || 0) + 0.01 >= it.amount ? 'paid' : 'partial'), notes: f.notes || null }
+  if (MODE === 'demo' || !sb) {
+    const l = demoFin().payments, ex = l.find(x => x.oblId === it.ob.id && x.period === it.period), v = { id: ex?.id || uid('pay'), oblId: it.ob.id, period: it.period, dueDate: it.due, amountDue: it.amount, paid: row.amount_paid, lateFee: row.late_fee, paidOn: row.paid_on, method: row.method || '', reference: row.reference || '', status: row.status, notes: row.notes || '' }
+    if (ex) Object.assign(ex, v); else l.push(v); persist(); emit(); return
+  }
+  const { error } = await sb.from('payments').upsert(row, { onConflict: 'obligation_id,period' })
+  if (error) throw new Error(/relation|schema cache/i.test(error.message) ? t('pf.e_sql') : t('team.e_error'))
+  await loadFinance()
+}
+export async function undoPayment(it) {
+  if (!it.pay) return
+  if (MODE === 'demo' || !sb) { db.payments = demoFin().payments.filter(x => x.id !== it.pay.id); persist(); emit(); return }
+  await sb.from('payments').delete().eq('id', it.pay.id); await loadFinance()
+}
+// First time setup for a home: suggest rent and mortgage from what Inventory already knows.
+export function suggestedObligations(v) {
+  const s = []
+  if (v.rent) s.push({ invId: v.id, kind: 'rent', dir: 'in', party: v.tenant || '', amount: v.rent, freq: 'monthly', dueDay: 1, grace: 5 })
+  if (v.mortgage?.payment) s.push({ invId: v.id, kind: 'mortgage', dir: 'out', party: v.mortgage.lender || '', amount: v.mortgage.payment, freq: 'monthly', dueDay: v.mortgage.dueDay || 1, grace: 15, account: v.mortgage.last4 ? '••' + v.mortgage.last4 : '' })
+  return s
 }

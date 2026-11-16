@@ -12,6 +12,7 @@ import { countyView } from './views/county.js'
 import { driveView } from './views/drive.js'
 import { sequencesView } from './views/sequences.js'
 import { voiceView } from './views/voice.js'
+import { portfolioView, financeView } from './views/portfolio.js'
 import { inventoryView } from './views/inventory.js'
 import { mortgages } from './views/mortgages.js'
 import { importer } from './views/importer.js'
@@ -29,6 +30,8 @@ const ROUTES = {
   voice: { icon: 'phone', render: el => voiceView(el), still: true, count: () => S.voiceCalls().filter(c => !c.reviewed).length || '' },
   lists: { icon: 'lists', render: el => lists(el), count: () => S.lists().length },
   inventory: { icon: 'inventory', render: el => inventoryView(el), count: () => S.inventory().length },
+  portfolio: { icon: 'inventory', render: el => portfolioView(el), still: true, count: () => S.periodItems(S.monthStart()).filter(i => i.status === 'late').length || '' },
+  finance: { icon: 'mortgages', render: el => financeView(el), still: true, count: () => S.periodItems(S.monthStart()).filter(i => i.ob.dir === 'out' && (i.status === 'late' || i.status === 'due')).length || '' },
   mortgages: { icon: 'mortgages', render: el => mortgages(el) },
   route: { icon: 'route', render: el => routeView(el), still: true },
   import: { icon: 'import', render: el => importer(el), still: true },
@@ -36,11 +39,15 @@ const ROUTES = {
 }
 const app = document.getElementById('app')
 
+// The finance role (pays bills, records rent) only sees money screens.
+const FINANCE_ONLY = ['portfolio', 'finance', 'inventory', 'mortgages', 'settings']
+const allowed = k => S.role() !== 'finance' || FINANCE_ONLY.includes(k)
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, '')
   const [path, qs] = h.split('?')
   const q = Object.fromEntries(new URLSearchParams(qs || ''))
-  return { route: ROUTES[path] ? path : 'dashboard', q }
+  const ok = ROUTES[path] && allowed(path)
+  return { route: ok ? path : (S.role() === 'finance' ? 'finance' : 'dashboard'), q }
 }
 
 const initials = e => String(e || '?').split(/[@.\s]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('') || '?'
@@ -56,7 +63,7 @@ function shell() {
   <div class="shell">
     <aside class="side" id="side">
       ${brandMark()}
-      <nav class="nav" aria-label="Portal">${Object.entries(ROUTES).map(([k, r]) => `<a href="#/${k}" data-r="${k}">${icon(r.icon)}<span>${esc(t('nav.' + k))}</span>${r.count ? `<span class="count">${r.count()}</span>` : ''}</a>`).join('')}</nav>
+      <nav class="nav" aria-label="Portal">${Object.entries(ROUTES).filter(([k]) => allowed(k)).map(([k, r]) => `<a href="#/${k}" data-r="${k}">${icon(r.icon)}<span>${esc(t('nav.' + k))}</span>${r.count ? `<span class="count">${r.count()}</span>` : ''}</a>`).join('')}</nav>
       <div class="side-foot">
         <button class="acct" data-acct aria-haspopup="menu"><span class="av">${esc(initials(S.userEmail()))}</span><span class="who"><b>${esc(S.userEmail())}</b><small>${esc([S.orgName(), t('role.' + (S.role() || 'viewer'))].filter(Boolean).join(' · '))}</small></span></button>
         ${credit()}

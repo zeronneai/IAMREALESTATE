@@ -823,3 +823,41 @@ details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-b
 .drive-sign input:checked + span { background: var(--brand, var(--text)); color: var(--brand-ink, #fff); border-color: transparent; }
 .drive-cam { display: flex; gap: 8px; align-items: center; justify-content: center; height: 44px; cursor: pointer; }
 .photos.mine { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+/* Portfolio & Finance */
+.pf-month { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.pf-month b { font-size: 18px; text-transform: capitalize; min-width: 150px; text-align: center; }
+.kpi .neg, .num.neg, b.neg { color: #c2432a; }
+.pf-bar { height: 6px; border-radius: 6px; background: var(--ink-3); overflow: hidden; margin-top: 8px; }
+.pf-bar i { display: block; height: 100%; background: #2f8a4c; }
+.pf-late { margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pf-tbl tr[data-v] { cursor: pointer; }
+.pf-tbl tr[data-v]:hover { background: var(--ink-2); }
+.pf-chip { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; border: 0; background: none; padding: 2px 6px 2px 0; cursor: pointer; font: inherit; }
+.pf-chip small { color: var(--muted); font-size: 11.5px; }
+.pf-grid { border-collapse: collapse; width: 100%; font-size: 13px; }
+.pf-grid th { font-size: 11.5px; color: var(--muted); font-weight: 600; padding: 6px 4px; text-transform: capitalize; }
+.pf-grid td { padding: 8px 4px; border-top: 1px solid var(--line); text-align: center; }
+.pf-grid td:first-child { text-align: left; min-width: 170px; }
+.pf-grid td:first-child small { display: block; }
+.pf-dot { width: 18px; height: 18px; border-radius: 50%; border: 0; background: var(--ink-4); cursor: pointer; display: inline-block; vertical-align: middle; }
+.pf-dot.ok { background: #2f8a4c; } .pf-dot.bad { background: #c2432a; } .pf-dot.gold { background: #d9a93a; } .pf-dot.blue { background: #2f6db0; }
+.pf-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
+.pf-legend span { display: inline-flex; gap: 6px; align-items: center; }
+.pf-legend .pf-dot { width: 10px; height: 10px; cursor: default; }
+.pf-sug { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.fin-group { margin-top: 16px; }
+.fin-row { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.fin-row:first-of-type { border-top: 0; }
+.fin-date { display: grid; gap: 4px; justify-items: start; }
+.fin-what { display: grid; min-width: 0; }
+.fin-what small { color: var(--muted); font-size: 12.5px; }
+.fin-amt { font-size: 16px; }
+.fin-row.late { background: linear-gradient(90deg, rgba(194,67,42,.06), transparent 60%); }
+@media (max-width: 700px) { .fin-row { grid-template-columns: 1fr auto; } .fin-date { grid-column: 1 / -1; display: flex; gap: 8px; } }
+.pf-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+@media (max-width: 1000px) { .pf-kpis { grid-template-columns: 1fr 1fr; } }
+.pf-kpi { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.pf-kpi small { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.pf-kpi b { font: 750 26px/1.1 var(--ui); letter-spacing: -.02em; }
+.pf-kpi .muted { font-size: 12.5px; }

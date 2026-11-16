@@ -24,7 +24,7 @@ const KEYLESS = [
   ['County records enrichment', 'Owner, mailing address, absentee, value, year built, sqft, deed date', 'epcad'],
   ['Do Not Call check', 'National DNC file for 915', 'dnc'],
 ]
-const ROLES = ['admin', 'agent', 'viewer']
+const ROLES = ['admin', 'agent', 'finance', 'viewer']
 const initials = s => String(s || '?').trim().split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('') || '?'
 const suggestPw = () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(12)); for (const n of r) s += a[n % a.length]; return s }
 

@@ -7,7 +7,7 @@
 //   DELETE /api/admin/users        { id }
 // First run: when team_members is empty, the first signed in user who calls this becomes admin.
 
-const ROLES = ['admin', 'agent', 'viewer']
+const ROLES = ['admin', 'agent', 'finance', 'viewer']
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const UUID = /^[0-9a-f-]{36}$/i
 
