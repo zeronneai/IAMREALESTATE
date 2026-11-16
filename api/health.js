@@ -11,6 +11,7 @@ export default function handler(req, res) {
       google_maps: has('GOOGLE_MAPS_KEY'),
       sms: has('TWILIO_ACCOUNT_SID') && has('TWILIO_AUTH_TOKEN'),
       email: has('RESEND_API_KEY'),
+      cartesia: has('CARTESIA_API_KEY'),
       skiptrace: !!process.env.SKIPTRACE_PROVIDER && (has('BATCHDATA_API_KEY') || has('REISKIP_API_KEY')),
       batchdata: has('BATCHDATA_API_KEY'),
       reiskip: has('REISKIP_API_KEY'),

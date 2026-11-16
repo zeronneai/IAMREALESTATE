@@ -65,6 +65,7 @@ export async function init() {
   await loadRemote()
   loadMessages().catch(() => {})
   loadSequences().catch(() => {})
+  loadVoiceCalls().catch(() => {})
   setInterval(() => { if (!document.hidden) loadMessages().catch(() => {}) }, 30000)
   return { ready: true }
 }
@@ -653,4 +654,77 @@ function fillDemo(tpl, p) {
   const first = String(p?.owners?.[0]?.name || '').split(/\s+/)[0].toLowerCase().replace(/^./, c => c.toUpperCase()) || 'there'
   const vals = { first, owner: p?.owners?.[0]?.name || '', address: String(p?.address || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()), agent: s.agent, company: s.company, phone: s.phone }
   return String(tpl).replace(/\{\{(\w+)\}\}/g, (_, k) => vals[k] ?? '')
+}
+
+// ---------- AI voice agent ----------
+export const VOICE_DEFAULT = {
+  name: 'Ava', lang: 'auto',
+  greeting_en: 'Hi, thanks for calling {{company}}. This is {{name}}, the virtual assistant. Are you calling about a property you might want to sell?',
+  greeting_es: 'Hola, gracias por llamar a {{company}}. Habla {{name}}, la asistente virtual. ¿Llama por una propiedad que le gustaría vender?',
+  ask: ['address', 'motivation', 'timeline', 'condition', 'price', 'callback'], hours: 'Mon to Fri 9am to 5pm', transfer: '', notes: '', voice_en: '', voice_es: '',
+}
+export const voiceConfig = () => ({ ...VOICE_DEFAULT, ...(db.settings.voiceAgent || {}), company: orgName() || (db.settings.mailSender?.company) || 'I AM Real Estate' })
+let calls = []
+const callRow = r => ({ id: r.id, parcelId: r.parcel_id, source: r.source, phone: r.phone, lang: r.lang, at: r.started_at, duration: r.duration_sec, transcript: r.transcript || [], summary: r.summary, data: r.data || {}, interest: r.interest, reviewed: r.reviewed })
+function demoCalls() {
+  if (!db.voiceCalls) {
+    const p = db.parcels.find(x => x.foreclosure) || db.parcels[0]
+    db.voiceCalls = [{ id: 'vc-1', parcelId: p?.id, source: 'phone', phone: '(915) 555-0142', lang: 'en', at: new Date(Date.now() - 5 * 3600e3).toISOString(), duration: 184, interest: 'hot', reviewed: false,
+      summary: `Owner of ${p?.address || 'the property'} got the foreclosure notice and wants to sell before the sale date. House needs a roof and carpet. Hoping for around $180,000. Wants a call after 5 pm.`,
+      data: { name: p?.owners?.[0]?.name, property_address: p?.address, motivation: 'Behind on payments, sale date next month', timeline: 'Before the sale date', condition: 'Needs roof and carpet', asking_price: 180000, best_time: 'After 5 pm', interest: 'hot', next_step: 'Call back today after 5 pm and set a walkthrough.' },
+      transcript: [{ role: 'agent', text: 'Hi, thanks for calling I AM Real Estate. This is Ava, the virtual assistant. Are you calling about a property you might want to sell?' }, { role: 'caller', text: 'Yeah, I got a letter about my house going to auction.' }, { role: 'agent', text: 'I am sorry you are dealing with that. What is the address of the property?' }, { role: 'caller', text: String(p?.address || '').toLowerCase() }, { role: 'agent', text: 'Thank you. How soon would you like to sell?' }, { role: 'caller', text: 'Before the sale date for sure.' }] }]
+  }
+  return db.voiceCalls
+}
+export const voiceCalls = () => (MODE === 'demo' ? demoCalls() : calls)
+export async function loadVoiceCalls() {
+  if (!sb) return
+  const { data, error } = await sb.from('voice_calls').select('*').order('started_at', { ascending: false }).limit(300)
+  if (!error) { calls = (data || []).map(callRow); emit() }
+}
+async function voiceApi(payload) {
+  const r = await fetch('/api/voice/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader() }, body: JSON.stringify(payload) })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.code === 'no_llm' ? t('va.e_llm') : t('va.e_brain'))
+  return j
+}
+// One turn of the conversation. In the demo the agent follows a simple script so it works without keys.
+export async function voiceTurn(messages, lang, cfg) {
+  if (MODE !== 'demo') return voiceApi({ mode: 'turn', messages, lang, config: cfg })
+  const Q = { en: { address: 'Got it. What is the address of the property?', motivation: 'Thank you. What has you thinking about selling?', timeline: 'I understand. How soon would you like to sell?', condition: 'And how is the condition of the house? Any repairs needed?', price: 'Do you have a price in mind?', occupancy: 'Is anyone living there right now?', mortgage: 'Roughly how much is still owed on it, if you are comfortable sharing?', callback: 'Perfect. What is your name, and the best number and time for someone from our team to call you back?' },
+    es: { address: 'Muy bien. ¿Cuál es la dirección de la propiedad?', motivation: 'Gracias. ¿Qué lo tiene pensando en vender?', timeline: 'Entiendo. ¿Qué tan pronto le gustaría vender?', condition: '¿Y cómo está la casa? ¿Necesita reparaciones?', price: '¿Tiene algún precio en mente?', occupancy: '¿Vive alguien ahí ahorita?', mortgage: '¿Más o menos cuánto se debe todavía, si gusta compartirlo?', callback: 'Perfecto. ¿Cuál es su nombre, y a qué número y hora le podemos llamar de nuestro equipo?' } }[lang]
+  const asked = messages.filter(m => m.role === 'assistant').length - 1
+  const next = cfg.ask[asked]
+  await new Promise(r => setTimeout(r, 500))
+  if (next) return { reply: Q[next], end: false }
+  return { reply: lang === 'es' ? 'Muchas gracias. Alguien de nuestro equipo le va a llamar pronto. ¡Que tenga buen día!' : 'Thank you so much. Someone from our team will call you back shortly. Have a great day!', end: true }
+}
+export async function saveVoiceCall({ transcript, lang, startedAt, source = 'test' }) {
+  let data = null
+  if (MODE !== 'demo') { try { data = (await voiceApi({ mode: 'summary', lang, transcript })).data } catch {} }
+  else {
+    const said = transcript.filter(x => x.role === 'caller').map(x => x.text)
+    data = { summary: (lang === 'es' ? 'Llamada de prueba. El cliente dijo: ' : 'Test call. The caller said: ') + said.join(' / ').slice(0, 300), interest: 'warm', next_step: lang === 'es' ? 'Revisar y devolver la llamada.' : 'Review and call back.', property_address: said[1] || null }
+  }
+  const addrKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').split(/\s+/).slice(0, 2).join(' ')
+  const p = data?.property_address ? db.parcels.find(x => addrKey(x.address) && addrKey(x.address) === addrKey(data.property_address)) : null
+  const call = { id: uid('vc'), parcelId: p?.id || null, source, lang, at: startedAt, duration: Math.round((Date.now() - new Date(startedAt)) / 1000), transcript, summary: data?.summary || '', data: data || {}, interest: data?.interest || null, reviewed: false }
+  if (MODE === 'demo') { demoCalls().unshift(call); persist() }
+  else {
+    const { data: row } = await sb.from('voice_calls').insert({ parcel_id: isUuid(call.parcelId) ? call.parcelId : null, source, lang, started_at: startedAt, duration_sec: call.duration, transcript, summary: call.summary, data: call.data, interest: call.interest }).select('id').single()
+    if (row) call.id = row.id
+    calls.unshift(call)
+  }
+  if (p) {
+    await addActivity(p.id, 'call', `${t('va.activity')}: ${call.summary}`.slice(0, 500)).catch(() => {})
+    if (['hot', 'warm'].includes(call.interest)) await addTask(p.id, call.data?.next_step || t('va.callback_task')).catch(() => {})
+  }
+  emit()
+  return call
+}
+export async function markCallReviewed(id) {
+  const c = voiceCalls().find(x => x.id === id); if (!c) return
+  c.reviewed = true
+  if (sb && isUuid(id)) await sb.from('voice_calls').update({ reviewed: true }).eq('id', id)
+  persist(); emit()
 }
