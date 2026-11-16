@@ -6,7 +6,9 @@ import { openDrawer } from '../drawer.js'
 
 let F = { place: 'El Paso, TX', mode: 'sale', priceMin: '', priceMax: '', beds: '', baths: '', type: '', daysMax: '' }
 let R = { list: [], total: 0, loading: false, error: '', center: null, cached: false }
-let map = null, L = null, pins = null, leadsLayer = null, base = null, sat = null, ownerMode = false, showLeads = true, satOn = false, hoverId = null
+let map = null, L = null, pins = null, leadsLayer = null, base = null, sat = null, lots = null, hl = null, ownerMode = false, showLeads = true, satOn = false, lotsOn = true, hoverId = null
+const inTexas = (la, lo) => la > 25.5 && la < 36.7 && lo > -106.8 && lo < -93.3
+const TX_EXPORT = 'https://feature.geographic.texas.gov/arcgis/rest/services/Parcels/stratmap_land_parcels_48_most_recent/MapServer/export'
 const TYPES = ['Single Family', 'Condo', 'Townhouse', 'Multi-Family', 'Manufactured', 'Land']
 const short = n => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`)
 const nice = s => String(s || '').toLowerCase().replace(/(^|[\s\-'/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
@@ -90,6 +92,7 @@ export function marketView(el) {
           <button class="btn sm ${ownerMode ? 'gold' : ''}" data-owner title="${esc(t('mk.owner_hint'))}">${icon('properties')}${esc(t('mk.owner_mode'))}</button>
           <button class="btn sm ${satOn ? 'gold' : ''}" data-sat>${esc(t('mk.satellite'))}</button>
           <button class="btn sm ${showLeads ? 'gold' : ''}" data-leads>${esc(t('mk.my_leads'))}</button>
+          <button class="btn sm ${lotsOn ? 'gold' : ''}" data-lots title="${esc(t('mk.lots_hint'))}">${esc(t('mk.lots'))}</button>
         </div>
         ${ownerMode ? `<div class="mk-tip">${esc(t('mk.owner_tip'))}</div>` : ''}
       </div>
@@ -102,6 +105,7 @@ export function marketView(el) {
   el.querySelector('[data-area]').onclick = () => search(el, true)
   el.querySelector('[data-owner]').onclick = () => { ownerMode = !ownerMode; marketView(el) }
   el.querySelector('[data-sat]').onclick = e => { satOn = !satOn; e.currentTarget.classList.toggle('gold', satOn); setBase() }
+  el.querySelector('[data-lots]').onclick = e => { lotsOn = !lotsOn; e.currentTarget.classList.toggle('gold', lotsOn); setLots() }
   el.querySelector('[data-leads]').onclick = e => { showLeads = !showLeads; e.currentTarget.classList.toggle('gold', showLeads); drawLeads() }
   paintList(el)
   initMap(el).then(() => { if (!R.list.length && !R.loading) search(el); else drawPins(false) })
@@ -134,11 +138,21 @@ async function initMap(el) {
   base = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'light-tiles', attribution: '&copy; OpenStreetMap' })
   sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery &copy; Esri' })
   setBase()
+  // Free Texas lot lines (TxGIO StratMap): drawn by the state server as images, visible when zoomed in.
+  const Lots = L.TileLayer.extend({ getTileUrl(c) {
+    const ts = 256, nw = map.unproject([c.x * ts, c.y * ts], c.z), se = map.unproject([(c.x + 1) * ts, (c.y + 1) * ts], c.z)
+    const a = L.CRS.EPSG3857.project(nw), b = L.CRS.EPSG3857.project(se)
+    return `${TX_EXPORT}?bbox=${a.x},${b.y},${b.x},${a.y}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&dpi=96&f=image`
+  } })
+  lots = new Lots('', { minZoom: 15, maxZoom: 20, opacity: .95, attribution: 'Lots &copy; TxGIO' })
+  setLots()
+  hl = L.geoJSON(null, { style: { color: '#c2432a', weight: 3, fillOpacity: .12 } }).addTo(map)
   pins = L.layerGroup().addTo(map); leadsLayer = L.layerGroup().addTo(map)
   drawLeads()
   map.on('moveend', () => { R.center = [map.getCenter().lat, map.getCenter().lng] })
   map.on('click', e => { if (ownerMode) ownerAt(e.latlng.lat, e.latlng.lng) })
 }
+function setLots() { if (!map || !lots) return; if (lotsOn) lots.addTo(map); else map.removeLayer(lots) }
 function setBase() { if (!map) return; if (satOn) { map.removeLayer(base); sat.addTo(map) } else { map.removeLayer(sat); base.addTo(map) } }
 function drawLeads() {
   if (!leadsLayer) return
@@ -192,14 +206,29 @@ function ownerCard(r) {
   const o = r.owner || {}, mail = o.mailingAddress?.formattedAddress || ''
   const absentee = r.ownerOccupied === false
   const tax = r.taxAssessments ? Object.values(r.taxAssessments).sort((a, b) => b.year - a.year)[0] : null
+  const extra = [r.over65 ? '<span class="pill gold">65+</span>' : '', r.homestead ? '<span class="pill">Homestead</span>' : '', r.county ? `<span class="pill">${esc(r.county)} Co.</span>` : ''].join('')
   const yrs = r.lastSaleDate ? Math.floor((Date.now() - new Date(r.lastSaleDate)) / (365.25 * 86400e3)) : null
-  return `<div class="mk-owner"><div class="mk-owner-h"><b>${esc((o.names || []).join(' & ') || t('va.unknown'))}</b><span class="pill ${o.type === 'Organization' ? 'blue' : ''}">${esc(o.type === 'Organization' ? t('mk.org') : t('mk.person'))}</span>${absentee ? `<span class="pill gold">${esc(t('cs.absentee'))}</span>` : r.ownerOccupied ? `<span class="pill">${esc(t('cs.lives_there'))}</span>` : ''}</div>
-    <div class="va-data">${[[t('mk.mailing'), mail], [t('mk.last_sale'), r.lastSaleDate && `${new Date(r.lastSaleDate).getFullYear()}${r.lastSalePrice ? ' · ' + money(r.lastSalePrice) : ''}${yrs != null ? ` (${yrs} ${t('mk.years_ago')})` : ''}`], [t('mk.tax_value'), tax && `${money(tax.value)} (${tax.year})`], [t('mk.beds'), r.bedrooms], [t('cs.sqft'), r.squareFootage && (+r.squareFootage).toLocaleString()], [t('c.built'), r.yearBuilt]].filter(([, v]) => v).map(([k, v]) => `<div><small class="muted">${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div></div>`
+  return `<div class="mk-owner"><div class="mk-owner-h"><b>${esc((o.names || []).join(' & ') || t('va.unknown'))}</b><span class="pill ${o.type === 'Organization' ? 'blue' : ''}">${esc(o.type === 'Organization' ? t('mk.org') : t('mk.person'))}</span>${absentee ? `<span class="pill gold">${esc(t('cs.absentee'))}</span>` : r.ownerOccupied ? `<span class="pill">${esc(t('cs.lives_there'))}</span>` : ''}${extra}</div>
+    <div class="va-data">${[[t('mk.mailing'), mail], [t('mk.last_sale'), r.lastSaleDate && `${String(r.lastSaleDate).slice(0, 4)}${r.lastSalePrice ? ' · ' + money(r.lastSalePrice) : ''}${yrs != null ? ` (${yrs} ${t('mk.years_ago')})` : ''}`], [t('mk.tax_value'), tax && `${money(tax.value)} (${tax.year})`], [t('mk.beds'), r.bedrooms], [t('cs.sqft'), r.squareFootage && (+r.squareFootage).toLocaleString()], [t('c.built'), r.yearBuilt]].filter(([, v]) => v).map(([k, v]) => `<div><small class="muted">${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div></div>`
 }
 
 // ---------- tap anywhere: who owns it (LandGlide style) ----------
 async function ownerAt(lat, lng) {
   const tip = L.popup({ maxWidth: 360 }).setLatLng([lat, lng]).setContent(`<span class="spin"></span> ${esc(t('mk.looking'))}`).openOn(map)
+  if (inTexas(lat, lng) && S.MODE !== 'demo') {
+    try {
+      const r = await fetch(`/api/txparcel?lat=${lat}&lng=${lng}`); const j = await r.json()
+      if (r.ok) {
+        hl.clearLayers()
+        if (!j.parcel) return tip.setContent(esc(t('mk.no_record')))
+        const rec = await txRecord(j.parcel); rec.latitude = lat; rec.longitude = lng
+        if (j.parcel.geometry) hl.addData(j.parcel.geometry)
+        tip.setContent(`<div class="mk-pop"><b>${esc(rec.formattedAddress || '')}</b>${ownerCard(rec)}<small class="muted">${esc(t('mk.free_tx'))}</small><button class="btn sm gold" data-addown>${esc(t('cs.add'))}</button></div>`)
+        tip.getElement()?.querySelector('[data-addown]')?.addEventListener('click', async () => { await addLead(rec, rec, rec.ownerOccupied === false ? ['absentee'] : []); map.closePopup() })
+        return
+      }
+    } catch { /* fall back to the nationwide source */ }
+  }
   try {
     const rec = S.MODE === 'demo' ? demoOwner(lat, lng) : (await api('property', { latitude: lat, longitude: lng, radius: 0.02, limit: 1 })).data?.[0]
     if (!rec) return tip.setContent(esc(t('mk.no_record')))
@@ -222,4 +251,22 @@ async function addLead(x, rec, tags) {
     await S.importParcels([row], { tag: row.tags[0] || null, source: 'market' })
     S.touch(); drawLeads(); toast(t('cs.added'))
   } catch { toast(t('team.e_error')) }
+}
+
+// Texas parcel (free state data) shaped like a nationwide record; El Paso adds the county index (homestead, 65+, deed date).
+async function txRecord(p) {
+  const n = v => (v == null || v === '' || isNaN(+v) || +v === 0 ? null : +v)
+  const situs = String(p.situs_addr || '').trim(), mail = String(p.mail_addr || [p.mail_line1, p.mail_city, p.mail_stat, p.mail_zip].filter(Boolean).join(' ')).trim()
+  const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)
+  const absentee = !!(mail && situs && norm(mail) !== norm(situs))
+  const org = /\b(LLC|INC|CORP|LTD|LP|TRUST|ESTATE|HOLDINGS|PROPERTIES|INVESTMENTS|CITY OF|COUNTY|ISD|CHURCH)\b/i.test(p.owner_name || '')
+  const rec = { formattedAddress: [situs, p.situs_city, 'TX', p.situs_zip].filter(Boolean).join(', '), addressLine1: situs, city: p.situs_city || '', state: 'TX', zipCode: String(p.situs_zip || '').slice(0, 5),
+    latitude: null, longitude: null, yearBuilt: n(p.year_built), ownerOccupied: situs && mail ? !absentee : null,
+    owner: { names: [p.owner_name].filter(Boolean), type: org ? 'Organization' : 'Individual', mailingAddress: { formattedAddress: mail, addressLine1: p.mail_line1 || mail, city: p.mail_city || '', state: p.mail_stat || '', zipCode: String(p.mail_zip || '').slice(0, 5) } },
+    taxAssessments: n(p.mkt_value) ? { [p.tax_year || 'now']: { year: p.tax_year || '', value: n(p.mkt_value) } } : null, county: p.county, propId: p.prop_id, legal: p.legal_desc }
+  if (/el\s*paso/i.test(p.county || '') && p.prop_id && S.client()) {
+    const { data } = await S.client().from('epcad_parcels').select('homestead,over65,last_deed_date,living_sqft,market_value').eq('prop_id', String(p.prop_id)).maybeSingle()
+    if (data) { rec.squareFootage = data.living_sqft; rec.lastSaleDate = data.last_deed_date; rec.homestead = data.homestead; rec.over65 = data.over65 }
+  }
+  return rec
 }
