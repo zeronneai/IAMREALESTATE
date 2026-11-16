@@ -38,6 +38,17 @@ export async function settingsView(el) {
 
   el.innerHTML = `
   ${adv ? `<div class="adv-banner fade-in">${icon('settings')}<span>${esc(t('s.adv_on'))}</span><a href="#/settings" data-advexit>${esc(t('s.adv_exit'))}</a></div><div id="advzone" style="display:grid;gap:24px"></div>` : ''}
+  ${S.isPlatform() ? `<div class="card fade-in" id="orgs" style="margin-bottom:24px"><h3>${esc(t('org.title'))}</h3><p class="lead">${esc(t('org.lead'))}</p><div id="orglist"><p class="muted"><span class="spin"></span></p></div>
+    <form data-orgadd style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+      <h4 style="margin:0 0 12px;font-size:15px">${esc(t('org.add'))}</h4>
+      <div class="org-form">
+        <div class="f"><label for="og-name">${esc(t('org.name'))}</label><input id="og-name" name="name" required autocomplete="off" /></div>
+        <div class="f"><label for="og-an">${esc(t('org.admin_name'))}</label><input id="og-an" name="adminName" autocomplete="off" /></div>
+        <div class="f"><label for="og-ae">${esc(t('org.admin_email'))}</label><input id="og-ae" name="adminEmail" type="email" required autocomplete="off" /></div>
+        <div class="f"><label for="og-pw">${esc(t('org.admin_pw'))}</label><div style="display:flex;gap:6px"><input id="og-pw" name="adminPassword" minlength="8" required autocomplete="new-password" style="flex:1;min-width:0" /><button type="button" class="btn sm ghost" data-ogen style="height:40px">${esc(t('team.generate'))}</button></div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap"><small class="muted">${esc(t('org.create_hint'))}</small><button class="btn gold">${esc(t('org.add'))}</button></div>
+    </form></div>` : ''}
   <div class="grid-2">
     <div style="display:grid;gap:24px;align-content:start">
       ${admin ? `<div class="card fade-in" id="team"><h3>${esc(t('team.title'))}</h3><p class="lead">${esc(t('team.lead'))}</p><div id="members"><p class="muted"><span class="spin"></span></p></div>
@@ -136,6 +147,15 @@ export async function settingsView(el) {
     }
     renderMembers(el)
   }
+  // companies (platform owner)
+  if (S.isPlatform()) {
+    el.querySelector('[data-ogen]').onclick = () => { el.querySelector('#og-pw').value = suggestPw() }
+    el.querySelector('[data-orgadd]').onsubmit = async e => {
+      e.preventDefault(); const btn = e.submitter; if (btn) btn.disabled = true
+      try { await S.orgCreate(Object.fromEntries(new FormData(e.target))); e.target.reset(); toast(t('org.created')); renderOrgs(el) } catch (err) { toast(err.message) } finally { if (btn) btn.disabled = false }
+    }
+    renderOrgs(el)
+  }
   el.querySelector('[data-advexit]')?.addEventListener('click', () => S.leaveAdvanced())
   if (adv) renderAdvanced(el.querySelector('#advzone'), dm)
 }
@@ -161,6 +181,28 @@ async function renderMembers(root) {
       <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('team.reset'))}</button></div></form>`, (box2, close) => {
       box2.querySelector('form').onsubmit = async e => { e.preventDefault(); try { await S.teamUpdate(id, { password: new FormData(e.target).get('pw') }); close(); toast(t('team.reset_done')) } catch (err) { toast(err.message) } }
     })
+  })
+}
+
+async function renderOrgs(root) {
+  const box = root.querySelector('#orglist'); if (!box) return
+  let list
+  try { list = await S.orgList() } catch (err) { box.innerHTML = `<div class="alert bad">${esc(err.message)}</div>`; return }
+  box.innerHTML = list.map(o => `<div class="member org-row" data-id="${esc(o.id)}">
+    <span class="av">${esc(initials(o.name))}</span>
+    <div class="who"><b>${esc(o.name)}${o.current ? ` <span class="pill gold" style="margin-left:4px">${esc(t('org.here'))}</span>` : ''}${o.active ? '' : ` <span class="pill bad" style="margin-left:4px">${esc(t('org.paused'))}</span>`}</b>
+      <small>${o.members} ${esc(t('org.members'))} · ${o.properties} ${esc(t('org.props'))}${o.created_at ? ' · ' + esc(date(o.created_at)) : ''}</small></div>
+    <div class="acts">${o.current ? '' : `<button class="btn sm" data-enter>${esc(t('org.enter'))}</button>`}<button class="btn sm ghost" data-pause>${esc(t(o.active ? 'org.pause' : 'org.resume'))}</button>${o.current ? '' : `<button class="btn sm ghost danger" data-del>${esc(t('org.delete'))}</button>`}</div>
+  </div>`).join('')
+  box.querySelectorAll('.org-row').forEach(row => {
+    const o = list.find(x => x.id === row.dataset.id)
+    row.querySelector('[data-enter]')?.addEventListener('click', async () => { try { await S.orgEnter(o.id); toast(o.name); renderOrgs(root) } catch (err) { toast(err.message) } })
+    row.querySelector('[data-pause]').onclick = async () => { try { await S.orgUpdate(o.id, { active: !o.active }); toast(t('org.saved')); renderOrgs(root) } catch (err) { toast(err.message) } }
+    row.querySelector('[data-del]')?.addEventListener('click', () => modal(`<h3>${esc(t('org.delete'))} ${esc(o.name)}</h3><p class="muted" style="margin:0">${esc(t('org.delete_q'))}</p>
+      <form style="display:grid;gap:12px"><input name="c" autocomplete="off" placeholder="${esc(o.name)}" required />
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn ghost danger">${esc(t('org.delete'))}</button></div></form>`, (b, close) => {
+      b.querySelector('form').onsubmit = async e => { e.preventDefault(); try { await S.orgRemove(o.id, new FormData(e.target).get('c')); close(); toast(t('org.deleted')); renderOrgs(root) } catch (err) { toast(err.message) } }
+    }))
   })
 }
 

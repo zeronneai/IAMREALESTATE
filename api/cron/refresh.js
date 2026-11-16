@@ -27,7 +27,7 @@ export default async function handler(req, res) {
       original_loan_amount: n.original_loan_amount || null, deed_of_trust_date: n.deed_of_trust_date || null,
       legal_description: n.legal_description || null, source_url: n.source_url || null, raw: n,
     }))
-    const r = await fetch(`${url}/rest/v1/notice_inbox?on_conflict=source_key`, {
+    const r = await fetch(`${url}/rest/v1/notice_inbox?on_conflict=org_id,source_key`, {
       method: 'POST',
       headers: { apikey: key, Authorization: `Bearer ${key}`, 'content-type': 'application/json', Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify(rows),

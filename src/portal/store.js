@@ -81,6 +81,9 @@ export async function signOut(stay = false) { if (sb) await sb.auth.signOut(); s
 // Role of the signed in user: admin / agent / viewer. Demo acts as admin.
 let myRole = MODE === 'demo' ? 'admin' : null
 export const role = () => myRole
+let myOrg = MODE === 'demo' ? 'I AM Real Estate' : null, platform = MODE === 'demo'
+export const orgName = () => myOrg
+export const isPlatform = () => platform
 export const isAdmin = () => myRole === 'admin'
 // Technical tools only for admins who open the portal with ?advanced (or #advanced).
 const ADV = 'iam_adv'
@@ -125,12 +128,43 @@ export async function teamRemove(id) {
   if (MODE === 'demo') { db.settings.demoTeam = demoTeam().filter(x => x.id !== id); persist(); return }
   await adminApi('DELETE', { id })
 }
+// ---------- companies (platform owner) ----------
+async function orgApi(method, payload) {
+  const r = await fetch('/api/admin/orgs', { method, headers: { 'Content-Type': 'application/json', ...authHeader() }, body: payload ? JSON.stringify(payload) : undefined })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) { const k = 'org.e_' + (j.code || 'error'); throw new Error(t(k) !== k ? t(k) : (t('team.e_' + (j.code || 'error')) !== 'team.e_' + (j.code || 'error') ? t('team.e_' + j.code) : t('team.e_error'))) }
+  return j
+}
+const demoOrgs = () => {
+  if (!db.settings.demoOrgs) db.settings.demoOrgs = [
+    { id: 'o-1', name: 'I AM Real Estate', active: true, members: 3, properties: 42, current: true, created_at: '2026-10-02T15:00:00Z' },
+    { id: 'o-2', name: 'Sun City Home Buyers', active: true, members: 2, properties: 0, current: false, created_at: '2026-11-15T15:00:00Z' },
+  ]
+  return db.settings.demoOrgs
+}
+export async function orgList() { return MODE === 'demo' ? demoOrgs().map(o => ({ ...o })) : (await orgApi('GET')).orgs || [] }
+export async function orgCreate(o) {
+  if (MODE === 'demo') { demoOrgs().push({ id: uid('o'), name: o.name, active: true, members: 1, properties: 0, current: false, created_at: new Date().toISOString() }); persist(); return }
+  await orgApi('POST', o)
+}
+export async function orgEnter(id) {
+  if (MODE === 'demo') { demoOrgs().forEach(o => { o.current = o.id === id }); persist(); return }
+  await orgApi('POST', { action: 'enter', id }); location.reload()
+}
+export async function orgUpdate(id, patch) {
+  if (MODE === 'demo') { const o = demoOrgs().find(x => x.id === id); if (o) Object.assign(o, patch); persist(); return }
+  await orgApi('PATCH', { id, ...patch })
+}
+export async function orgRemove(id, confirm) {
+  if (MODE === 'demo') { db.settings.demoOrgs = demoOrgs().filter(x => x.id !== id); persist(); return }
+  await orgApi('DELETE', { id, confirm })
+}
 export const myId = () => session?.user?.id || (MODE === 'demo' ? 'u-1' : null)
 async function loadRole() {
   try {
     // First run: the API makes the first signed in user admin when the team is empty.
     const r = await fetch('/api/admin/users?me=1', { headers: authHeader() })
-    if (r.ok) { const j = await r.json(); myRole = j.role || null; return }
+    if (r.ok) { const j = await r.json(); myRole = j.role || null; myOrg = j.org || null; platform = !!j.platform; return }
   } catch {}
   try {
     const { data } = await sb.from('team_members').select('role').eq('user_id', session.user.id).maybeSingle()

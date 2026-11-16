@@ -40,25 +40,34 @@ export async function handle({ method, query = {}, body = {}, token, env = proce
   if (!user?.id) return fail(401, 'unauthorized', 'Please sign in again.')
 
   // 2. Caller's team row. First run bootstrap when the team is empty.
-  let r = await rest(`team_members?user_id=eq.${encodeURIComponent(user.id)}&select=role,email,full_name`)
-  if (!r.ok) return fail(500, 'db', 'Team storage is not ready.')
+  let r = await rest(`team_members?user_id=eq.${encodeURIComponent(user.id)}&select=role,email,full_name,org_id,orgs(name,active)`)
+  if (!r.ok) {
+    // Before orgs.sql runs there is no org_id column: fall back to the single-company layout.
+    r = await rest(`team_members?user_id=eq.${encodeURIComponent(user.id)}&select=role,email,full_name`)
+    if (!r.ok) return fail(500, 'db', 'Team storage is not ready.')
+  }
   let me = (await json(r))?.[0] || null
+  if (me?.orgs && me.orgs.active === false) me = null
   if (!me) {
     const any = await rest('team_members?select=user_id&limit=1')
     const rows = any.ok ? await json(any) : null
     if (Array.isArray(rows) && rows.length === 0) {
       const ins = await rest('team_members', { method: 'POST', headers: { Prefer: 'return=representation,resolution=ignore-duplicates' }, body: JSON.stringify({ user_id: user.id, email: user.email, full_name: user.user_metadata?.full_name || null, role: 'admin' }) })
-      if (ins.ok) me = { role: 'admin', email: user.email, bootstrap: true }
+      if (ins.ok) { const row = (await json(ins))?.[0]; me = { role: 'admin', email: user.email, bootstrap: true, org_id: row?.org_id } }
     }
   }
-  if (method === 'GET' && (query.me === '1' || query.me === 1 || query.me === true)) return out(200, { role: me?.role || null, email: user.email, bootstrap: !!me?.bootstrap })
+  const pa = await rest(`platform_admins?user_id=eq.${encodeURIComponent(user.id)}&select=user_id`)
+  const platform = pa.ok ? ((await json(pa)) || []).length > 0 : false
+  if (method === 'GET' && (query.me === '1' || query.me === 1 || query.me === true)) return out(200, { role: me?.role || null, email: user.email, bootstrap: !!me?.bootstrap, org: me?.orgs?.name || null, orgId: me?.org_id || null, platform })
   if (!me) return fail(403, 'forbidden', 'Your account is not on the team yet.')
   if (me.role !== 'admin') return fail(403, 'forbidden', 'Only admins can manage the team.')
 
-  const admins = async () => { const a = await rest('team_members?role=eq.admin&select=user_id'); return a.ok ? (await json(a)) || [] : [] }
+  // Everything below is limited to the caller's own company.
+  const org = me.org_id ? `&org_id=eq.${me.org_id}` : ''
+  const admins = async () => { const a = await rest(`team_members?role=eq.admin&select=user_id${org}`); return a.ok ? (await json(a)) || [] : [] }
 
   if (method === 'GET') {
-    const l = await rest('team_members?select=user_id,email,full_name,role,created_at&order=created_at.asc')
+    const l = await rest(`team_members?select=user_id,email,full_name,role,created_at&order=created_at.asc${org}`)
     if (!l.ok) return fail(500, 'db', 'Could not load the team.')
     return out(200, { members: ((await json(l)) || []).map(m => ({ id: m.user_id, name: m.full_name || '', email: m.email, role: m.role, created_at: m.created_at })) })
   }
@@ -79,20 +88,22 @@ export async function handle({ method, query = {}, body = {}, token, env = proce
       return fail(502, 'auth', 'Could not create the account.')
     }
     const id = cu?.id || cu?.user?.id
-    const ins = await rest('team_members', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify({ user_id: id, email, full_name: name || null, role }) })
+    const ins = await rest('team_members', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify({ user_id: id, email, full_name: name || null, role, ...(me.org_id ? { org_id: me.org_id } : {}) }) })
     if (!ins.ok) { await admin(`users/${id}`, { method: 'DELETE' }); return fail(500, 'db', 'Could not add the member.') }
     return out(200, { ok: true, id })
   }
 
   const id = String(body.id || query.id || '')
   if (!UUID.test(id)) return fail(400, 'invalid', 'Unknown member.')
+  const tr = await rest(`team_members?user_id=eq.${id}&select=user_id${org}`)
+  if (!tr.ok || !((await json(tr)) || []).length) return fail(404, 'invalid', 'Unknown member.')
 
   if (method === 'PATCH') {
     if (body.role != null) {
       if (!ROLES.includes(body.role)) return fail(400, 'invalid', 'Unknown role.')
       if (id === user.id && body.role !== 'admin') return fail(400, 'self', 'You cannot change your own role.')
       if (body.role !== 'admin') { const a = await admins(); if (a.length <= 1 && a.some(x => x.user_id === id)) return fail(400, 'last_admin', 'The team needs at least one admin.') }
-      const u = await rest(`team_members?user_id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ role: body.role }) })
+      const u = await rest(`team_members?user_id=eq.${id}${org}`, { method: 'PATCH', body: JSON.stringify({ role: body.role }) })
       if (!u.ok) return fail(500, 'db', 'Could not update the role.')
     }
     if (body.password != null) {
@@ -107,7 +118,7 @@ export async function handle({ method, query = {}, body = {}, token, env = proce
   if (method === 'DELETE') {
     if (id === user.id) return fail(400, 'self', 'You cannot remove yourself.')
     const a = await admins(); if (a.length <= 1 && a.some(x => x.user_id === id)) return fail(400, 'last_admin', 'The team needs at least one admin.')
-    await rest(`team_members?user_id=eq.${id}`, { method: 'DELETE' })
+    await rest(`team_members?user_id=eq.${id}${org}`, { method: 'DELETE' })
     const d = await admin(`users/${id}`, { method: 'DELETE' })
     if (!d.ok && d.status !== 404) return fail(502, 'auth', 'Could not remove the account.')
     return out(200, { ok: true })

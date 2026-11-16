@@ -655,3 +655,8 @@ textarea.notes, .tpl textarea { height: auto; padding: 12px; }
 .photos figure { cursor: zoom-in; transition: transform .15s ease; }
 .photos figure:hover { transform: scale(1.01); }
 .ph-big img { width: 100%; border-radius: 12px; display: block; }
+
+/* Companies */
+.org-form { display: grid; grid-template-columns: 1fr 1fr 1fr 1.5fr; gap: 12px; }
+@media (max-width: 900px) { .org-form { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .org-form { grid-template-columns: 1fr; } }

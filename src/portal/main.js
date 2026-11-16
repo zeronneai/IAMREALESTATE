@@ -46,7 +46,7 @@ function shell() {
       <a class="brand" href="/" title="iamrealestate"><span class="mk"><span class="i">I</span>AM</span><small>${esc(t('brand.sub'))}</small></a>
       <nav class="nav" aria-label="Portal">${Object.entries(ROUTES).map(([k, r]) => `<a href="#/${k}" data-r="${k}">${icon(r.icon)}<span>${esc(t('nav.' + k))}</span>${r.count ? `<span class="count">${r.count()}</span>` : ''}</a>`).join('')}</nav>
       <div class="side-foot">
-        <button class="acct" data-acct aria-haspopup="menu"><span class="av">${esc(initials(S.userEmail()))}</span><span class="who"><b>${esc(S.userEmail())}</b><small>${esc(t('role.' + (S.role() || 'viewer')))}</small></span></button>
+        <button class="acct" data-acct aria-haspopup="menu"><span class="av">${esc(initials(S.userEmail()))}</span><span class="who"><b>${esc(S.userEmail())}</b><small>${esc([S.orgName(), t('role.' + (S.role() || 'viewer'))].filter(Boolean).join(' · '))}</small></span></button>
         ${credit()}
       </div>
     </aside>
