@@ -532,3 +532,4 @@ details[open] .plus { background: var(--gold); } details[open] .plus::before { b
 .vc-note { margin: 0; font-size: 11px; color: var(--muted); text-align: center; }
 .chat-panel.voice .chat-log, .chat-panel.voice .chat-quick, .chat-panel.voice .chat-input { display: none; }
 .chat-panel.voice .vc-open { display: none; }
+.lprice-ask { font-size: .8em; letter-spacing: .01em; }

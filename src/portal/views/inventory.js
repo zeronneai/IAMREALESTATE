@@ -1,6 +1,6 @@
 import { t } from '../i18n.js'
 import * as S from '../store.js'
-import { esc, money, date, modal, toast, icon } from '../ui.js'
+import { esc, money, date, modal, toast, icon, photoUrl } from '../ui.js'
 
 const STAT = ['acquisition', 'rehab', 'listed', 'rented', 'sold']
 const statCls = { acquisition: 'blue', rehab: 'warn', listed: 'gold', rented: 'ok', sold: '' }
@@ -36,9 +36,10 @@ export function inventoryView(el) {
   </div>
   <div class="inv-grid">${items.map(v => {
     const m = invMath(v); const over = (v.rehabActual || 0) > (v.rehabBudget || 0)
-    const cover = v.listing?.photos?.[0]
+    const lp = v.parcelId && S.parcel(v.parcelId)
+    const cover = v.listing?.photos?.[0] || (lp && !lp.demo ? photoUrl(lp, 'street', 640, 300, true) : null)
     return `<article class="inv fade-in ${v.published ? 'is-pub' : ''}" data-id="${esc(v.id)}">
-      ${cover ? `<img class="inv-cover" src="${esc(cover)}" alt="">` : ''}
+      ${cover ? `<img class="inv-cover" src="${esc(cover)}" alt="" onerror="this.remove()">` : ''}
       <button class="pub-toggle ${v.published ? 'on' : ''}" data-pub="${esc(v.id)}" ${v.status === 'sold' ? 'disabled' : ''} title="${esc(t(v.published ? 'pub.hint_on' : 'pub.hint_off'))}">
         <span class="pt-track"><span class="pt-knob"></span></span><span class="pt-label">${esc(t(v.published ? 'pub.public' : 'pub.internal'))}</span>
       </button>
@@ -94,14 +95,14 @@ function editInventory(v) {
 const AREAS = ['West Side', 'Eastside', 'Northeast', 'Central', 'Socorro', 'Horizon City', 'Upper Valley', 'Lower Valley', 'Santa Teresa', 'Canutillo']
 export function publishEditor(v, { publishAfter = true } = {}) {
   const p = v.parcelId ? S.parcel(v.parcelId) : S.parcels().find(x => x.address && v.address && x.address.toUpperCase() === v.address.toUpperCase())
-  const L = { type: v.status === 'rented' ? 'rent' : 'sale', price: v.status === 'rented' ? v.rent : (v.listPrice || v.arv || ''), beds: p?.beds || '', baths: p?.baths || '', sqft: p?.sqft || '', year: p?.yearBuilt || '', area: '', desc_en: '', desc_es: '', photos: [], ...(v.listing || {}) }
+  const L = { type: v.status === 'rented' ? 'rent' : 'sale', price: v.status === 'rented' ? (v.rent || '') : (v.listPrice || ''), beds: p?.beds || '', baths: p?.baths || '', sqft: p?.sqft || '', year: p?.yearBuilt || '', area: '', desc_en: '', desc_es: '', photos: [], ...(v.listing || {}) }
   L.photos = [...(L.photos || [])]
   modal('<div></div>', (box, close) => {
     const paint = () => {
       box.innerHTML = `<h3>${esc(t('pub.title'))}</h3><p class="muted" style="margin:0">${esc(v.address)} · ${esc(t('pub.lead'))}</p>
       <form class="form-grid" data-pf>
         <div class="f"><label>${esc(t('pub.type'))}</label><select name="type">${['sale', 'rent', 'multi'].map(x => `<option value="${x}" ${L.type === x ? 'selected' : ''}>${esc(t('pub.t_' + x))}</option>`).join('')}</select></div>
-        <div class="f"><label>${esc(L.type === 'rent' ? t('pub.rent') : t('pub.price'))}</label><input name="price" type="number" step="100" value="${esc(L.price)}" required></div>
+        <div class="f"><label>${esc(L.type === 'rent' ? t('pub.rent') : t('pub.price'))} <span class="dim">(${esc(t('own.optional'))})</span></label><input name="price" type="number" step="100" value="${esc(L.price ?? '')}" placeholder="${esc(t('pub.no_price'))}"></div>
         <div class="f"><label>${esc(t('pub.area'))}</label><select name="area"><option value="">El Paso</option>${AREAS.map(a => `<option ${L.area === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></div>
         <div class="f"><label>${esc(t('pub.beds'))}</label><input name="beds" type="number" step="1" value="${esc(L.beds)}"></div>
         <div class="f"><label>${esc(t('pub.baths'))}</label><input name="baths" type="number" step="0.5" value="${esc(L.baths)}"></div>
@@ -131,7 +132,6 @@ export function publishEditor(v, { publishAfter = true } = {}) {
         e.preventDefault(); sync()
         const num = k => (L[k] === '' || L[k] == null ? null : +L[k])
         const listing = { type: L.type, price: num('price'), beds: num('beds'), baths: num('baths'), sqft: num('sqft'), year: num('year'), area: L.area || '', desc_en: String(L.desc_en || '').trim(), desc_es: String(L.desc_es || '').trim(), photos: L.photos }
-        if (!listing.price) return toast(t('pub.need_price'))
         if (publishAfter && !listing.photos.length) return toast(t('pub.need_photo'))
         try {
           await S.saveListing(v.id, listing)

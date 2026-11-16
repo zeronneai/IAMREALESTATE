@@ -284,7 +284,7 @@ export async function saveInventory(item) {
   if (!item.id) item.id = uid('inv')
   if (i >= 0) db.inventory[i] = item; else db.inventory.unshift(item)
   if (sb) {
-    const row = { address: item.address, zip: item.zip, status: item.status, acquired_on: item.acquiredOn || null, purchase_price: item.purchasePrice, rehab_budget: item.rehabBudget, rehab_actual: item.rehabActual, arv: item.arv, list_price: item.listPrice || null, sold_price: item.soldPrice || null, sold_on: item.soldOn || null, tenant_name: item.tenant || null, monthly_rent: item.rent || null, holding_cost_month: item.holdingMonth || null, notes: item.notes || null, ...(item.listing ? { listing: item.listing } : {}) }
+    const row = { address: item.address, zip: item.zip, status: item.status, acquired_on: item.acquiredOn || null, purchase_price: item.purchasePrice, rehab_budget: item.rehabBudget, rehab_actual: item.rehabActual, arv: item.arv, list_price: item.listPrice || null, sold_price: item.soldPrice || null, sold_on: item.soldOn || null, tenant_name: item.tenant || null, monthly_rent: item.rent || null, holding_cost_month: item.holdingMonth || null, notes: item.notes || null, ...(item.listing ? { listing: item.listing } : {}), ...(isUuid(item.parcelId) ? { parcel_id: item.parcelId } : {}) }
     if (isUuid(item.id)) await sb.from('inventory').update(row).eq('id', item.id)
     else { const { data } = await sb.from('inventory').insert(row).select('id').single(); if (data) item.id = data.id }
   }
@@ -759,3 +759,13 @@ export async function uploadListingPhoto(invId, file) {
   if (error) throw new Error(t('pub.e_upload'))
   return sb.storage.from('listing-photos').getPublicUrl(path).data.publicUrl
 }
+
+// A lead the team bought: create its inventory record from the property data (price fields are optional).
+export async function moveToInventory(parcelId, { acquiredOn, purchasePrice, rehabBudget, status }) {
+  const p = parcel(parcelId); if (!p) return null
+  const exists = db.inventory.find(v => v.parcelId === parcelId); if (exists) return exists
+  const item = await saveInventory({ parcelId, address: p.address, zip: p.zip || '', status: status || 'acquisition', acquiredOn: acquiredOn || new Date().toISOString().slice(0, 10), purchasePrice: purchasePrice ?? null, rehabBudget: rehabBudget ?? null, rehabActual: null, arv: p.marketValue || null, docs: [], statements: [], notes: '', published: false, listing: {} })
+  await addActivity(parcelId, 'status', t('own.activity')).catch(() => {})
+  return item
+}
+export const inventoryFor = parcelId => db.inventory.find(v => v.parcelId === parcelId) || null

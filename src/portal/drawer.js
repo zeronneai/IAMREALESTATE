@@ -1,7 +1,7 @@
 // Property detail drawer: everything the client asked to see on one screen.
 import { t } from './i18n.js'
 import * as S from './store.js'
-import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl, photoBox } from './ui.js'
+import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl, photoBox, modal } from './ui.js'
 import { researchLinks } from './research.js'
 import { startConversation } from './views/inbox.js'
 import * as DNC from './dnc.js'
@@ -52,6 +52,7 @@ function render(dr) {
       <button class="btn gold sm" data-skip>${icon('phone')}${esc(t('d.skip'))}</button>
       ${(p.contacts || []).length ? `<button class="btn sm" data-msg>${icon('inbox')}${esc(t('msg.button'))}</button>` : ''}
       ${(p.contacts || []).length ? `<button class="btn sm" data-seq>${esc(t('sel.seq'))}</button>` : ''}
+      ${S.inventoryFor(p.id) ? `<button class="btn sm owned" data-owned>${esc(t('own.view'))}</button>` : `<button class="btn sm" data-bought>${esc(t('own.btn'))}</button>`}
       <button class="btn sm" data-list>${esc(t('sel.add'))}</button>
       <a class="btn sm ghost" href="${gmaps}" target="_blank" rel="noopener">${esc(t('d.maps'))}</a>
       <button class="btn sm ghost" data-epm>${esc(t('d.epcad_match'))}</button>
@@ -150,6 +151,8 @@ function render(dr) {
   $('[data-x]', dr).onclick = closeDrawer
   dr.querySelectorAll('[data-ph]').forEach(fg => fg.onclick = () => photoBox(p, fg.dataset.ph))
   dr.querySelectorAll('[data-sms]').forEach(b => b.onclick = () => { closeDrawer(); startConversation(p.id, b.dataset.sms) })
+  $('[data-owned]', dr)?.addEventListener('click', () => { closeDrawer(); location.hash = '#/inventory' })
+  $('[data-bought]', dr)?.addEventListener('click', () => boughtModal(p))
   $('[data-seq]', dr)?.addEventListener('click', () => import('./views/sequences.js').then(m => m.enrollModal([p.id])))
   $('[data-msg]', dr)?.addEventListener('click', () => { closeDrawer(); startConversation(p.id) })
   $('[data-skip]', dr).onclick = () => skipTrace([p.id])
@@ -170,4 +173,23 @@ function render(dr) {
   dr.querySelectorAll('[data-rl]').forEach(a => a.addEventListener('click', () => S.addActivity(p.id, 'research', a.dataset.rl)))
   const notes = $('[data-notes]', dr)
   notes.onchange = () => { S.updateParcel(p.id, { notes: notes.value }); toast(t('toast.saved')) }
+}
+
+function boughtModal(p) {
+  modal(`<h3>${esc(t('own.title'))}</h3><p class="muted" style="margin:0">${esc(p.address)} · ${esc(t('own.lead'))}</p>
+    <form class="form-grid" data-own>
+      <div class="f"><label>${esc(t('own.date'))}</label><input name="acquiredOn" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
+      <div class="f"><label>${esc(t('own.status'))}</label><select name="status"><option value="acquisition">${esc(t('is.acquisition'))}</option><option value="rehab">${esc(t('is.rehab'))}</option></select></div>
+      <div class="f"><label>${esc(t('own.price'))} <span class="dim">(${esc(t('own.optional'))})</span></label><input name="purchasePrice" type="number" step="500" placeholder="$"></div>
+      <div class="f"><label>${esc(t('own.rehab'))} <span class="dim">(${esc(t('own.optional'))})</span></label><input name="rehabBudget" type="number" step="500" placeholder="$"></div>
+      <p class="full muted" style="margin:0;font-size:12.5px">${esc(t('own.note'))}</p>
+      <div class="full" style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('own.go'))}</button></div>
+    </form>`, (box, close) => {
+    box.querySelector('[data-own]').onsubmit = async e => {
+      e.preventDefault()
+      const fd = Object.fromEntries(new FormData(e.target))
+      const num = v => (v === '' ? null : +v)
+      try { await S.moveToInventory(p.id, { acquiredOn: fd.acquiredOn, status: fd.status, purchasePrice: num(fd.purchasePrice), rehabBudget: num(fd.rehabBudget) }); close(); toast(t('own.done')) } catch { toast(t('team.e_error')) }
+    }
+  })
 }

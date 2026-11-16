@@ -29,9 +29,9 @@ export function initListings({ onTour }) {
   function filtered() {
     const f = new FormData(form)
     const type = f.get('type'), area = f.get('area'), beds = +f.get('beds'), max = +f.get('max')
-    return ACTIVE.filter(l => (type === 'all' || l.type === type) && (area === 'all' || l.area === area) && l.beds >= beds && (!max || l.type === 'rent' || l.price <= max))
+    return ACTIVE.filter(l => (type === 'all' || l.type === type) && (area === 'all' || l.area === area) && l.beds >= beds && (!max || l.type === 'rent' || !l.price || l.price <= max))
   }
-  function priceLabel(l) { return l.type === 'rent' ? `${money(l.price)}<small>${t('homes.mo')}</small>` : money(l.price) }
+  function priceLabel(l) { if (!l.price) return `<span class="lprice-ask">${t('homes.ask')}</span>`; return l.type === 'rent' ? `${money(l.price)}<small>${t('homes.mo')}</small>` : money(l.price) }
   function render() {
     const list = filtered()
     count.textContent = t('homes.count', { n: list.length })
@@ -75,7 +75,7 @@ export function initListings({ onTour }) {
           ${l.year ? `<div><dt>${getLang() === 'es' ? 'Año' : 'Built'}</dt><dd>${l.year}</dd></div>` : ''}
         </dl>
         <p>${getLang() === 'es' ? l.es : l.en}</p>
-        ${l.type !== 'rent' ? `<div class="lm-pay"><span>${t('lm.est')}</span><strong>${money(payment(l.price))}${t('homes.mo')}</strong><small>${t('lm.estD')}</small></div>` : ''}
+        ${l.type !== 'rent' && l.price ? `<div class="lm-pay"><span>${t('lm.est')}</span><strong>${money(payment(l.price))}${t('homes.mo')}</strong><small>${t('lm.estD')}</small></div>` : ''}
         <div class="lm-actions">
           ${l.tour ? `<button type="button" class="btn btn-gold" id="lmTour">${t('lm.tour')} <span aria-hidden="true">→</span></button>` : ''}
           <a class="btn btn-ghost-dark" href="tel:${l.type === 'rent' ? '+19154653384' : '+19152680716'}">${t('lm.sched')}</a>

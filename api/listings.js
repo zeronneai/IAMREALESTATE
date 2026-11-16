@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       en: String(l.desc_en || '').slice(0, 1200), es: String(l.desc_es || l.desc_en || '').slice(0, 1200),
       photos: (l.photos || []).filter(u => /^https:\/\//.test(u)).slice(0, 20),
     }
-  }).filter(l => l.price > 0)
+  })
   res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
   res.status(200).json({ listings })
 }

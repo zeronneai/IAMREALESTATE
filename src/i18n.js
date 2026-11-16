@@ -93,6 +93,7 @@ export const dict = {
   'homes.count': ['{n} homes', '{n} propiedades'],
   'homes.none': ['No homes match. Try widening your filters.', 'No hay resultados. Prueba con otros filtros.'],
   'homes.sample': ['Sample listing', 'Propiedad demo'],
+  'homes.ask': ['Call for price', 'Precio a consultar'],
   'homes.mo': ['/mo', '/mes'],
   'homes.bd': ['bd', 'rec'],
   'homes.ba': ['ba', 'baños'],

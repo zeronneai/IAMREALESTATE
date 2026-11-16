@@ -788,3 +788,4 @@ details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-b
 .pub-ph.cover [data-first] { display: none; }
 .pub-add { width: 112px; height: 80px; border-radius: 10px; border: 1.5px dashed var(--line-2); display: grid; place-items: center; align-content: center; gap: 4px; cursor: pointer; font-size: 12px; color: var(--muted); text-align: center; }
 .pub-add svg { width: 18px; height: 18px; }
+.btn.owned { color: #1f6b38; border-color: rgba(47,138,76,.4); background: #eef7f1; }
