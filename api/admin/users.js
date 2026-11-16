@@ -40,7 +40,8 @@ export async function handle({ method, query = {}, body = {}, token, env = proce
   if (!user?.id) return fail(401, 'unauthorized', 'Please sign in again.')
 
   // 2. Caller's team row. First run bootstrap when the team is empty.
-  let r = await rest(`team_members?user_id=eq.${encodeURIComponent(user.id)}&select=role,email,full_name,org_id,orgs(name,active)`)
+  let r = await rest(`team_members?user_id=eq.${encodeURIComponent(user.id)}&select=role,email,full_name,org_id,orgs(name,active,logo_url,brand_color,website)`)
+  if (!r.ok) r = await rest(`team_members?user_id=eq.${encodeURIComponent(user.id)}&select=role,email,full_name,org_id,orgs(name,active)`)
   if (!r.ok) {
     // Before orgs.sql runs there is no org_id column: fall back to the single-company layout.
     r = await rest(`team_members?user_id=eq.${encodeURIComponent(user.id)}&select=role,email,full_name`)
@@ -58,7 +59,7 @@ export async function handle({ method, query = {}, body = {}, token, env = proce
   }
   const pa = await rest(`platform_admins?user_id=eq.${encodeURIComponent(user.id)}&select=user_id`)
   const platform = pa.ok ? ((await json(pa)) || []).length > 0 : false
-  if (method === 'GET' && (query.me === '1' || query.me === 1 || query.me === true)) return out(200, { role: me?.role || null, email: user.email, bootstrap: !!me?.bootstrap, org: me?.orgs?.name || null, orgId: me?.org_id || null, platform })
+  if (method === 'GET' && (query.me === '1' || query.me === 1 || query.me === true)) return out(200, { role: me?.role || null, email: user.email, bootstrap: !!me?.bootstrap, org: me?.orgs?.name || null, orgId: me?.org_id || null, brand: { logo: me?.orgs?.logo_url || null, color: me?.orgs?.brand_color || null, website: me?.orgs?.website || null }, platform })
   if (!me) return fail(403, 'forbidden', 'Your account is not on the team yet.')
   if (me.role !== 'admin') return fail(403, 'forbidden', 'Only admins can manage the team.')
 

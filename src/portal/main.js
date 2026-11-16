@@ -1,4 +1,5 @@
 import './portal.css'
+import { applyBrand } from './brand.js'
 import { t, getLang, setLang, onLang } from './i18n.js'
 import * as S from './store.js'
 import { esc, icon, $, $$, renderBatch, onSel, toast, modal } from './ui.js'
@@ -38,12 +39,13 @@ const credit = () => `<span class="credit">${esc(t('credit.by'))} <b>PURPLE ROOT
 function shell() {
   app.className = ''
   const demo = S.MODE === 'demo'
+  applyBrand(S.brand())
   document.body.classList.toggle('has-ribbon', demo)
   app.innerHTML = `
   ${demo ? `<div class="ribbon"><span class="demo-tag">${esc(t('demo.banner').split('·')[0].trim())}</span><span class="hide-sm">${esc(t('demo.banner').split('·')[1] || '')}</span></div>` : ''}
   <div class="shell">
     <aside class="side" id="side">
-      <a class="brand" href="/" title="iamrealestate"><span class="mk"><span class="i">I</span>AM</span><small>${esc(t('brand.sub'))}</small></a>
+      ${brandMark()}
       <nav class="nav" aria-label="Portal">${Object.entries(ROUTES).map(([k, r]) => `<a href="#/${k}" data-r="${k}">${icon(r.icon)}<span>${esc(t('nav.' + k))}</span>${r.count ? `<span class="count">${r.count()}</span>` : ''}</a>`).join('')}</nav>
       <div class="side-foot">
         <button class="acct" data-acct aria-haspopup="menu"><span class="av">${esc(initials(S.userEmail()))}</span><span class="who"><b>${esc(S.userEmail())}</b><small>${esc([S.orgName(), t('role.' + (S.role() || 'viewer'))].filter(Boolean).join(' · '))}</small></span></button>
@@ -112,7 +114,8 @@ function route() {
   const { route: r, q } = parseHash()
   $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.r === r))
   $('#title').textContent = t('nav.' + r)
-  document.title = `${t('nav.' + r)} · IAM Portal`
+  if (r !== 'settings') applyBrand(S.brand())
+  document.title = `${t('nav.' + r)} · ${S.orgName() && !/^i am real estate$/i.test(S.orgName()) ? S.orgName() : 'IAM Portal'}`
   const view = $('#view')
   if (lastRoute !== r) view.scrollTop = 0
   lastRoute = r
@@ -167,3 +170,11 @@ async function boot() {
 }
 boot()
 export { toast }
+
+function brandMark() {
+  const b = S.brand(), name = S.orgName()
+  const iam = !name || /^i am real estate$/i.test(name)
+  if (b.logo) return `<a class="brand has-logo" href="#/dashboard" title="${esc(name || '')}"><img src="${esc(b.logo)}" alt="${esc(name || '')}"><small>${esc(iam ? t('brand.sub') : name)}</small></a>`
+  if (iam) return `<a class="brand" href="/" title="iamrealestate"><span class="mk"><span class="i">I</span>AM</span><small>${esc(t('brand.sub'))}</small></a>`
+  return `<a class="brand" href="#/dashboard"><span class="mk org-name">${esc(name)}</span><small>${esc(t('brand.sub'))}</small></a>`
+}

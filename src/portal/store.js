@@ -83,6 +83,22 @@ let myRole = MODE === 'demo' ? 'admin' : null
 export const role = () => myRole
 let myOrg = MODE === 'demo' ? 'I AM Real Estate' : null, platform = MODE === 'demo'
 export const orgName = () => myOrg
+let myBrand = {}
+export const brand = () => (MODE === 'demo' ? (db.settings.demoBrand || {}) : myBrand)
+export async function saveBrand(b) {
+  const clean = { logo: b.logo || null, color: b.color || null, website: b.website || null }
+  if (MODE === 'demo') { db.settings.demoBrand = clean; persist(); emit(); return }
+  const { error } = await sb.rpc('set_brand', { p_logo: clean.logo, p_color: clean.color, p_website: clean.website })
+  if (error) throw new Error(/function|schema/i.test(error.message) ? t('brand.e_sql') : t('team.e_error'))
+  myBrand = clean; emit()
+}
+export async function brandFromSite(url) {
+  if (MODE === 'demo') throw new Error(t('brand.e_demo'))
+  const r = await fetch('/api/brand?url=' + encodeURIComponent(url), { headers: authHeader() })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(t('brand.e_site'))
+  return j
+}
 export const isPlatform = () => platform
 export const isAdmin = () => myRole === 'admin'
 // Technical tools only for admins who open the portal with ?advanced (or #advanced).
@@ -164,7 +180,7 @@ async function loadRole() {
   try {
     // First run: the API makes the first signed in user admin when the team is empty.
     const r = await fetch('/api/admin/users?me=1', { headers: authHeader() })
-    if (r.ok) { const j = await r.json(); myRole = j.role || null; myOrg = j.org || null; platform = !!j.platform; return }
+    if (r.ok) { const j = await r.json(); myRole = j.role || null; myOrg = j.org || null; platform = !!j.platform; myBrand = j.brand || {}; return }
   } catch {}
   try {
     const { data } = await sb.from('team_members').select('role').eq('user_id', session.user.id).maybeSingle()

@@ -3,6 +3,7 @@ import * as S from '../store.js'
 import { esc, toast, dropzone, icon, modal, date } from '../ui.js'
 import * as DNC from '../dnc.js'
 import * as EP from '../epcad.js'
+import { colorFromLogo, normalizeLogo, applyBrand } from '../brand.js'
 import { DEFAULT_TEMPLATES, DEFAULT_SENDER } from '../mail.js'
 import { DEFAULT_PSF } from '../parse/epcad.js'
 
@@ -51,6 +52,19 @@ export async function settingsView(el) {
     </form></div>` : ''}
   <div class="grid-2">
     <div style="display:grid;gap:24px;align-content:start">
+      ${admin ? `<div class="card fade-in" id="brandcard"><h3>${esc(t('brand.title'))}</h3><p class="lead">${esc(t('brand.lead'))}</p>
+        <div class="brand-row">
+          <div><div class="brand-prev" data-bprev></div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="color" class="swatch" data-bcolor aria-label="${esc(t('brand.color'))}"><div style="display:grid;gap:2px"><small class="muted">${esc(t('brand.color'))}</small><button type="button" class="btn sm ghost" data-bauto style="height:26px;font-size:11px">${esc(t('brand.auto'))}</button></div></div>
+          </div>
+          <div style="display:grid;gap:12px">
+            <div class="f"><label for="b-site">${esc(t('brand.site'))}</label><div style="display:flex;gap:6px"><input id="b-site" data-bsite placeholder="example.com" autocomplete="off" style="flex:1;min-width:0"><button type="button" class="btn sm" data-bfetch style="height:40px">${esc(t('brand.fetch'))}</button></div></div>
+            <div data-bpicks></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn sm ghost" style="cursor:pointer">${esc(t('brand.upload'))}<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" data-bfile hidden></label><button type="button" class="btn sm ghost" data-breset>${esc(t('brand.reset'))}</button></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="btn gold" data-bsave>${esc(t('brand.save'))}</button></div>
+      </div>` : ''}
       ${admin ? `<div class="card fade-in" id="team"><h3>${esc(t('team.title'))}</h3><p class="lead">${esc(t('team.lead'))}</p><div id="members"><p class="muted"><span class="spin"></span></p></div>
         <form data-add style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
           <h4 style="margin:0 0 12px;font-size:15px">${esc(t('team.add'))}</h4>
@@ -147,6 +161,7 @@ export async function settingsView(el) {
     }
     renderMembers(el)
   }
+  if (admin) mountBrand(el)
   // companies (platform owner)
   if (S.isPlatform()) {
     el.querySelector('[data-ogen]').onclick = () => { el.querySelector('#og-pw').value = suggestPw() }
@@ -182,6 +197,44 @@ async function renderMembers(root) {
       box2.querySelector('form').onsubmit = async e => { e.preventDefault(); try { await S.teamUpdate(id, { password: new FormData(e.target).get('pw') }); close(); toast(t('team.reset_done')) } catch (err) { toast(err.message) } }
     })
   })
+}
+
+function mountBrand(el) {
+  const cur = { ...S.brand() }
+  const prev = el.querySelector('[data-bprev]'), col = el.querySelector('[data-bcolor]'), site = el.querySelector('[data-bsite]'), picks = el.querySelector('[data-bpicks]')
+  site.value = cur.website || ''
+  const paint = () => {
+    prev.innerHTML = cur.logo ? `<img src="${esc(cur.logo)}" alt="">` : `<span class="muted" style="font-size:13px">${esc(t('brand.none'))}</span>`
+    col.value = cur.color || '#121110'
+    applyBrand(cur)
+  }
+  const useLogo = async data => {
+    try { cur.logo = await normalizeLogo(data) } catch { cur.logo = data }
+    try { cur.color = (await colorFromLogo(cur.logo)) || cur.color } catch {}
+    paint()
+  }
+  col.oninput = () => { cur.color = col.value; applyBrand(cur) }
+  el.querySelector('[data-bauto]').onclick = async () => { if (!cur.logo) return; try { cur.color = await colorFromLogo(cur.logo); paint() } catch {} }
+  el.querySelector('[data-bfile]').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => useLogo(r.result); r.readAsDataURL(f) }
+  el.querySelector('[data-breset]').onclick = () => { cur.logo = null; cur.color = null; picks.innerHTML = ''; paint() }
+  el.querySelector('[data-bfetch]').onclick = async e => {
+    const btn = e.currentTarget; if (!site.value.trim()) return site.focus()
+    btn.disabled = true; picks.innerHTML = `<p class="muted" style="margin:0"><span class="spin"></span> ${esc(t('brand.fetching'))}</p>`
+    try {
+      const j = await S.brandFromSite(site.value.trim())
+      cur.website = j.website || site.value.trim()
+      if (!j.logos?.length) { picks.innerHTML = `<div class="alert">${esc(t('brand.e_nologo'))}</div>`; return }
+      picks.innerHTML = `<small class="muted">${esc(t('brand.found'))}</small><div class="brand-picks">${j.logos.map((l, i) => `<button type="button" data-i="${i}" class="${i === 0 ? 'on' : ''}"><img src="${esc(l.data)}" alt=""></button>`).join('')}</div>`
+      picks.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { picks.querySelectorAll('[data-i]').forEach(x => x.classList.toggle('on', x === b)); useLogo(j.logos[+b.dataset.i].data) })
+      await useLogo(j.logos[0].data)
+      if (!cur.color && j.color) { cur.color = j.color; paint() }
+    } catch (err) { picks.innerHTML = `<div class="alert bad">${esc(err.message)}</div>` } finally { btn.disabled = false }
+  }
+  el.querySelector('[data-bsave]').onclick = async e => {
+    const btn = e.currentTarget; btn.disabled = true
+    try { cur.website = site.value.trim() || null; await S.saveBrand(cur); toast(t('brand.saved')); setTimeout(() => location.reload(), 600) } catch (err) { toast(err.message) } finally { btn.disabled = false }
+  }
+  paint()
 }
 
 async function renderOrgs(root) {
