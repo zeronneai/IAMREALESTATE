@@ -449,7 +449,7 @@ function fromRow(r) {
   return {
     id: r.id, address: r.address, city: r.city, state: r.state, zip: r.zip, lat: r.lat, lng: r.lng, epcadId: r.epcad_property_id, legal: r.legal_description, type: r.property_type,
     yearBuilt: r.year_built, sqft: r.sqft, beds: r.beds, baths: r.baths, lot: r.lot_sqft, marketValue: +r.market_value || 0, lastDeedDate: r.last_deed_date, lastSalePrice: r.last_sale_price,
-    vacant: r.vacant, tags: r.tags || [], homestead: (r.tags || []).includes('homestead'), over65: (r.tags || []).includes('over65'), valueEstimated: (r.tags || []).includes('value_est'), status: r.status, notes: r.notes || '', source: r.source, demo: r.demo,
+    vacant: r.vacant, photos: r.photos || [], tags: r.tags || [], homestead: (r.tags || []).includes('homestead'), over65: (r.tags || []).includes('over65'), valueEstimated: (r.tags || []).includes('value_est'), status: r.status, notes: r.notes || '', source: r.source, demo: r.demo,
     owners: (r.owners || []).map(o => ({ id: o.id, name: o.name, mailing: o.mailing_address, mailingCity: o.mailing_city, mailingState: o.mailing_state, mailingZip: o.mailing_zip, absentee: o.is_absentee, deceased: o.deceased })),
     contacts: (r.contacts || []).map(c => ({ kind: c.kind, value: c.value, phoneType: c.phone_type, dnc: c.dnc, litigator: c.litigator, confidence: c.confidence, provider: c.provider })),
     foreclosure: f ? { id: f.id, saleDate: f.sale_date, saleWindow: f.sale_time_window, saleLocation: f.sale_location, filingDate: f.filing_date, trustees: f.trustees || [], mortgagee: f.mortgagee, servicer: f.servicer, originalLoan: +f.original_loan_amount || null, dotDate: f.deed_of_trust_date, estBalance: +f.est_loan_balance || null, instrument: f.instrument_number, attorney: f.attorney_firm, outcome: f.outcome } : null,
@@ -459,7 +459,7 @@ function fromRow(r) {
     tasks: (r.tasks || []).map(t => ({ id: t.id, title: t.title, due: t.due_on, done: t.done })),
   }
 }
-const parcelRow = p => ({ address: p.address, city: p.city, state: p.state, zip: p.zip, lat: p.lat, lng: p.lng, epcad_property_id: p.epcadId || null, legal_description: p.legal, property_type: p.type, year_built: p.yearBuilt, sqft: p.sqft, beds: p.beds, baths: p.baths, lot_sqft: p.lot, market_value: p.marketValue, last_deed_date: p.lastDeedDate || null, last_sale_price: p.lastSalePrice || null, vacant: !!p.vacant, tags: p.tags, status: p.status, score: p._score, score_breakdown: p._parts, notes: p.notes, source: p.source })
+const parcelRow = p => ({ address: p.address, city: p.city, state: p.state, zip: p.zip, lat: p.lat, lng: p.lng, epcad_property_id: p.epcadId || null, legal_description: p.legal, property_type: p.type, year_built: p.yearBuilt, sqft: p.sqft, beds: p.beds, baths: p.baths, lot_sqft: p.lot, market_value: p.marketValue, last_deed_date: p.lastDeedDate || null, last_sale_price: p.lastSalePrice || null, vacant: !!p.vacant, tags: p.tags, status: p.status, score: p._score, score_breakdown: p._parts, notes: p.notes, source: p.source, ...(p.photos?.length ? { photos: p.photos } : {}) })
 async function sbUpdateParcel(p, patch) {
   const row = parcelRow(p)
   const keep = Object.fromEntries(Object.entries(row).filter(([k]) => ['status', 'notes', 'tags', 'score', 'score_breakdown', ...Object.keys(patch).map(snake)].includes(k)))
@@ -770,3 +770,24 @@ export async function moveToInventory(parcelId, { acquiredOn, purchasePrice, reh
 }
 export const inventoryFor = parcelId => db.inventory.find(v => v.parcelId === parcelId) || null
 export const touch = () => { persist(); emit() }
+
+// Driving for Dollars: upload a phone photo of a property (resized in the browser).
+export async function uploadDrivePhoto(file) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file) })
+  const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight))
+  const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k)
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src)
+  if (MODE === 'demo' || !sb) return c.toDataURL('image/jpeg', 0.8)
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.8))
+  const path = `${myOrgId || 'org'}/drive/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.jpg`
+  const { error } = await sb.storage.from('listing-photos').upload(path, blob, { contentType: 'image/jpeg' })
+  if (error) throw new Error(t('dr.e_upload'))
+  return sb.storage.from('listing-photos').getPublicUrl(path).data.publicUrl
+}
+export async function reverseGeocode(lat, lng) {
+  if (MODE === 'demo') return null
+  const r = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`, { headers: authHeader() })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) { const e = new Error(j.code || 'not_found'); e.code = j.code; throw e }
+  return j
+}

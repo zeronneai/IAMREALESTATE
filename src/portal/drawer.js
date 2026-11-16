@@ -60,6 +60,7 @@ function render(dr) {
     </div>
   </div>
   <div class="dr-body">
+    ${(p.photos || []).length ? `<div class="photos mine">${p.photos.slice(0, 4).map((u, i) => `<figure data-mine="${i}"><img alt="" src="${esc(u)}"><figcaption>${esc(t('dr.team_photo'))}</figcaption></figure>`).join('')}</div>` : ''}
     ${p.demo ? '' : `<div class="photos">
       <figure data-ph="street"><img alt="" src="${photoUrl(p, 'street')}" onerror="this.closest('figure').remove()"><figcaption>${esc(t('d.ph_street'))}</figcaption></figure>
       <figure data-ph="sat"><img alt="" src="${photoUrl(p, 'sat')}" onerror="this.closest('figure').remove()"><figcaption>${esc(t('d.ph_sat'))}</figcaption></figure>
@@ -149,6 +150,7 @@ function render(dr) {
 
   $('.dr-body', dr).scrollTop = keepScroll
   $('[data-x]', dr).onclick = closeDrawer
+  dr.querySelectorAll('[data-mine]').forEach(fg => fg.onclick = () => modal(`<div class="ph-big"><img src="${esc(p.photos[+fg.dataset.mine])}" alt=""></div><div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn sm gold" data-close>OK</button></div>`, null, { wide: true }))
   dr.querySelectorAll('[data-ph]').forEach(fg => fg.onclick = () => photoBox(p, fg.dataset.ph))
   dr.querySelectorAll('[data-sms]').forEach(b => b.onclick = () => { closeDrawer(); startConversation(p.id, b.dataset.sms) })
   $('[data-owned]', dr)?.addEventListener('click', () => { closeDrawer(); location.hash = '#/inventory' })
