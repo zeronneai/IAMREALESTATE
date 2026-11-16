@@ -8,6 +8,7 @@ export default function handler(req, res) {
       supabase_service: has('SUPABASE_SERVICE_ROLE_KEY'),
       anthropic: has('ANTHROPIC_API_KEY'),
       gemini: has('GEMINI_API_KEY'),
+      google_maps: has('GOOGLE_MAPS_KEY'),
       skiptrace: !!process.env.SKIPTRACE_PROVIDER && (has('BATCHDATA_API_KEY') || has('REISKIP_API_KEY')),
       batchdata: has('BATCHDATA_API_KEY'),
       reiskip: has('REISKIP_API_KEY'),

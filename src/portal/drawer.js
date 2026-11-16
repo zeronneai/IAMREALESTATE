@@ -1,7 +1,7 @@
 // Property detail drawer: everything the client asked to see on one screen.
 import { t } from './i18n.js'
 import * as S from './store.js'
-import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast } from './ui.js'
+import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl } from './ui.js'
 import { researchLinks } from './research.js'
 import * as DNC from './dnc.js'
 import * as EP from './epcad.js'
@@ -56,6 +56,10 @@ function render(dr) {
     </div>
   </div>
   <div class="dr-body">
+    ${p.demo ? '' : `<div class="photos">
+      <figure><img alt="" src="${photoUrl(p, 'street')}" onerror="this.closest('figure').remove()"><figcaption>${esc(t('d.ph_street'))}</figcaption></figure>
+      <figure><img alt="" src="${photoUrl(p, 'sat')}" onerror="this.closest('.photos').remove()"><figcaption>${esc(t('d.ph_sat'))}</figcaption></figure>
+    </div>`}
     ${f ? `<div class="countdown">
       <div class="big mono">${d.daysToSale < 0 ? '0' : d.daysToSale}</div>
       <div><small>${esc(d.daysToSale < 0 ? t('d.sold') : t('d.sale_in') + ' ' + t('k.days'))}</small><b>${esc(date(f.saleDate))}</b> · ${esc(f.saleWindow || '')}<div class="muted" style="font-size:12px">${esc(f.saleLocation || '')}</div></div>

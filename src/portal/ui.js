@@ -241,3 +241,8 @@ export function dropzone(el, onFiles, { multiple = true, accept = '' } = {}) {
   el.addEventListener('dragleave', () => el.classList.remove('over'))
   el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('over'); if (e.dataTransfer.files.length) onFiles([...e.dataTransfer.files]) })
 }
+
+// Property photos (Street View / satellite) served by /api/photo. Hidden quietly when unavailable.
+export const photoQ = p => (p.lat && p.lng) ? `${p.lat},${p.lng}` : [p.address, p.city || 'El Paso', p.state || 'TX', p.zip].filter(Boolean).join(', ')
+export const photoUrl = (p, kind = 'street', w = 640, h = 400) => `/api/photo?kind=${kind}&w=${w}&h=${h}&q=${encodeURIComponent(photoQ(p))}`
+export const thumb = p => p.demo ? '' : `<img class="thumb" loading="lazy" alt="" src="${photoUrl(p, 'street', 160, 110)}" onerror="this.remove()">`

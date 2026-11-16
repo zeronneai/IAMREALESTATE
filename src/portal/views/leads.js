@@ -1,7 +1,7 @@
 // Foreclosures and Properties share this view; mode decides the default filters and columns.
 import { t } from '../i18n.js'
 import * as S from '../store.js'
-import { esc, money, date, table, sortRows, scorePill, statusPill, tagPill, selection, selChanged } from '../ui.js'
+import { esc, money, date, table, sortRows, scorePill, statusPill, tagPill, selection, selChanged, thumb } from '../ui.js'
 import { openDrawer } from '../drawer.js'
 import { mountMap } from '../map.js'
 
@@ -40,7 +40,7 @@ export function leads(el, mode, params = {}) {
   const sorted = sortRows(rows, st.sort, getters)
 
   const cols = [
-    { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<b>${esc(p.address)}</b><span>${esc(p.zip)} · ${esc(p.type || '')}</span>` },
+    { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<div class="addr-ph">${thumb(p)}<div><b>${esc(p.address)}</b><span>${esc(p.zip)} · ${esc(p.type || '')}</span></div></div>` },
     { key: 'owner', label: t('c.owner'), render: p => `${esc(p.owners?.[0]?.name || 'n/a')}${p._d.absentee ? ' <span class="pill blue">ABS</span>' : ''}${(p.contacts || []).some(c => c.kind === 'phone') ? ' <span class="pill ok">☎</span>' : ''}` },
     ...(mode === 'foreclosures' ? [
       { key: 'sale', label: t('c.sale'), render: p => `<span class="mono">${esc(date(p.foreclosure.saleDate))}</span> <span class="dim mono" style="font-size:11px">${p._d.daysToSale}d</span>` },

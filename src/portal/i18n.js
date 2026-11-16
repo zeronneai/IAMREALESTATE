@@ -127,6 +127,8 @@ const D = {
   'd.skip': ['Skip trace owner', 'Skip trace al dueño'],
   'd.close': ['Close', 'Cerrar'],
   'd.maps': ['Open in Google Maps', 'Abrir en Google Maps'],
+  'd.ph_street': ['Street view', 'Vista de calle'],
+  'd.ph_sat': ['Satellite', 'Satelital'],
   'd.epcad': ['EPCAD record', 'Ficha EPCAD'],
   'd.taxoffice': ['Tax office', 'Oficina de impuestos'],
   'sc.equity': ['Equity', 'Equity'],
