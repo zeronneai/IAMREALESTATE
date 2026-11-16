@@ -97,6 +97,7 @@ export function initListings({ onTour }) {
   fetch('/api/listings').then(r => (r.ok ? r.json() : null)).then(j => {
     const real = (j?.listings || []).filter(x => x.photos?.length)
     if (!real.length) return
+    const fine = document.querySelector('[data-i18n="homes.fine"]'); if (fine) fine.hidden = true
     ACTIVE = real.map(x => ({ ...x, real: true, tour: false, img: x.photos, street: x.street, area: x.area || 'El Paso' }))
     const sel = form.area, have = new Set([...sel.options].map(o => o.value))
     ACTIVE.forEach(l => { if (!have.has(l.area)) { sel.add(new Option(l.area, l.area)); have.add(l.area) } })
