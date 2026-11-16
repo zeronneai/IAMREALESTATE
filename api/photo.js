@@ -13,8 +13,8 @@ export default async function handler(req, res) {
     let url = null
     if (kind === 'street') {
       // Metadata calls are free: only pay for an image that exists.
-      const meta = await fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?location=${loc}&source=outdoor&key=${key}`).then(r => r.json())
-      if (meta.status === 'OK') url = `https://maps.googleapis.com/maps/api/streetview?size=${w}x${h}&location=${loc}&source=outdoor&fov=80&key=${key}`
+      const meta = await fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?location=${loc}&radius=80&key=${key}`).then(r => r.json())
+      if (meta.status === 'OK') url = `https://maps.googleapis.com/maps/api/streetview?size=${w}x${h}&location=${loc}&radius=80&fov=80&key=${key}`
       // No street photo: the drawer hides this slot; thumbnails ask for the satellite fallback.
       else if (req.query.fallback !== '1') return res.status(404).setHeader('Cache-Control', 'public, s-maxage=604800').end()
     }
