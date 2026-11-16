@@ -1,7 +1,7 @@
 // Property detail drawer: everything the client asked to see on one screen.
 import { t } from './i18n.js'
 import * as S from './store.js'
-import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl } from './ui.js'
+import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl, photoBox } from './ui.js'
 import { researchLinks } from './research.js'
 import * as DNC from './dnc.js'
 import * as EP from './epcad.js'
@@ -57,8 +57,8 @@ function render(dr) {
   </div>
   <div class="dr-body">
     ${p.demo ? '' : `<div class="photos">
-      <figure><img alt="" src="${photoUrl(p, 'street')}" onerror="this.closest('figure').remove()"><figcaption>${esc(t('d.ph_street'))}</figcaption></figure>
-      <figure><img alt="" src="${photoUrl(p, 'sat')}" onerror="this.closest('.photos').remove()"><figcaption>${esc(t('d.ph_sat'))}</figcaption></figure>
+      <figure data-ph="street"><img alt="" src="${photoUrl(p, 'street')}" onerror="this.closest('figure').remove()"><figcaption>${esc(t('d.ph_street'))}</figcaption></figure>
+      <figure data-ph="sat"><img alt="" src="${photoUrl(p, 'sat')}" onerror="this.closest('figure').remove()"><figcaption>${esc(t('d.ph_sat'))}</figcaption></figure>
     </div>`}
     ${f ? `<div class="countdown">
       <div class="big mono">${d.daysToSale < 0 ? '0' : d.daysToSale}</div>
@@ -145,6 +145,7 @@ function render(dr) {
 
   $('.dr-body', dr).scrollTop = keepScroll
   $('[data-x]', dr).onclick = closeDrawer
+  dr.querySelectorAll('[data-ph]').forEach(fg => fg.onclick = () => photoBox(p, fg.dataset.ph))
   $('[data-skip]', dr).onclick = () => skipTrace([p.id])
   $('[data-list]', dr).onclick = () => pickList([p.id])
   dr.querySelectorAll('[data-st]').forEach(b => b.onclick = async () => { const st = b.dataset.st; await S.updateParcel(p.id, { status: st }); await S.addActivity(p.id, 'status', `Status: ${t('st.' + st)}`) })

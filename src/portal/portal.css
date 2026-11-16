@@ -652,3 +652,6 @@ textarea.notes, .tpl textarea { height: auto; padding: 12px; }
 .addr-ph > div { display: flex; flex-direction: column; }
 .thumb { width: 56px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; background: #f1efea; }
 @media (max-width: 640px) { .photos { grid-template-columns: 1fr; } }
+.photos figure { cursor: zoom-in; transition: transform .15s ease; }
+.photos figure:hover { transform: scale(1.01); }
+.ph-big img { width: 100%; border-radius: 12px; display: block; }

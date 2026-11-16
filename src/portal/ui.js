@@ -244,5 +244,11 @@ export function dropzone(el, onFiles, { multiple = true, accept = '' } = {}) {
 
 // Property photos (Street View / satellite) served by /api/photo. Hidden quietly when unavailable.
 export const photoQ = p => (p.lat && p.lng) ? `${p.lat},${p.lng}` : [p.address, p.city || 'El Paso', p.state || 'TX', p.zip].filter(Boolean).join(', ')
-export const photoUrl = (p, kind = 'street', w = 640, h = 400) => `/api/photo?kind=${kind}&w=${w}&h=${h}&q=${encodeURIComponent(photoQ(p))}`
-export const thumb = p => p.demo ? '' : `<img class="thumb" loading="lazy" alt="" src="${photoUrl(p, 'street', 160, 110)}" onerror="this.remove()">`
+export const photoUrl = (p, kind = 'street', w = 640, h = 400, fallback = false) => `/api/photo?kind=${kind}&w=${w}&h=${h}${fallback ? '&fallback=1' : ''}&q=${encodeURIComponent(photoQ(p))}`
+export const thumb = p => p.demo ? '' : `<img class="thumb" loading="lazy" alt="" src="${photoUrl(p, 'street', 160, 110, true)}" onerror="this.remove()">`
+export function photoBox(p, kind) {
+  const q = encodeURIComponent(photoQ(p))
+  const gm = kind === 'sat' ? `https://www.google.com/maps/search/?api=1&query=${q}&basemap=satellite` : `https://www.google.com/maps/search/?api=1&query=${q}`
+  modal(`<div class="ph-big"><img alt="" src="${photoUrl(p, kind, 640, 420)}"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><a class="btn sm" href="${gm}" target="_blank" rel="noopener">Google Maps</a><button class="btn sm gold" data-close>OK</button></div>`, null, { wide: true })
+}
