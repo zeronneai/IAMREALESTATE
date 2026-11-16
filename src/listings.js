@@ -12,6 +12,9 @@ export const LISTINGS = [
   { id: 'L8', type: 'sale', area: 'Socorro', street: '0000 Valle Dorado Rd (Demo)', price: 389000, beds: 4, baths: 3, sqft: 2400, year: 2018, img: ['ext5', 'int-living', 'int-kitchen', 'int-bath'], tour: true, house: { style: 'pueblo', courtyard: true, pergola: true, casita: true, rv: true, yard: 14 }, es: 'Estilo pueblo en lote grande con casita y espacio para RV.', en: 'Pueblo-style home on a large lot with casita and RV pad.' },
 ]
 
+// Real homes published from the portal (Inventory > Public) replace the samples when there are any.
+let ACTIVE = LISTINGS
+const imgSrc = s => (/^(https?:|data:)/.test(s) ? s : `/img/${s}.webp`)
 const money = n => '$' + Math.round(n).toLocaleString('en-US')
 const typeLabel = ty => t(ty === 'rent' ? 'type.rent' : ty === 'multi' ? 'type.multi' : 'type.sale')
 
@@ -26,7 +29,7 @@ export function initListings({ onTour }) {
   function filtered() {
     const f = new FormData(form)
     const type = f.get('type'), area = f.get('area'), beds = +f.get('beds'), max = +f.get('max')
-    return LISTINGS.filter(l => (type === 'all' || l.type === type) && (area === 'all' || l.area === area) && l.beds >= beds && (!max || l.type === 'rent' || l.price <= max))
+    return ACTIVE.filter(l => (type === 'all' || l.type === type) && (area === 'all' || l.area === area) && l.beds >= beds && (!max || l.type === 'rent' || l.price <= max))
   }
   function priceLabel(l) { return l.type === 'rent' ? `${money(l.price)}<small>${t('homes.mo')}</small>` : money(l.price) }
   function render() {
@@ -35,13 +38,13 @@ export function initListings({ onTour }) {
     grid.innerHTML = list.length ? list.map((l, i) => `
       <article class="lcard" style="--i:${i}">
         <button type="button" class="lcard-btn" data-id="${l.id}" aria-label="${t('homes.view')}: ${l.street}">
-          <div class="lcard-img"><img src="/img/${l.img[0]}.webp" alt="" loading="lazy" width="800" height="533" />
-            <span class="tag-demo mono">${t('homes.sample')}</span>
+          <div class="lcard-img"><img src="${imgSrc(l.img[0])}" alt="" loading="lazy" width="800" height="533" />
+            ${l.real ? '' : `<span class="tag-demo mono">${t('homes.sample')}</span>`}
             ${l.tour ? `<span class="tag-3d"><span class="pulse"></span>${t('homes.tour3d')}</span>` : ''}
           </div>
           <div class="lcard-body">
             <div class="lcard-top"><span class="lprice">${priceLabel(l)}</span><span class="ltype">${typeLabel(l.type)}</span></div>
-            <p class="lmeta mono">${l.beds} ${t('homes.bd')} · ${l.baths} ${t('homes.ba')} · ${l.sqft.toLocaleString()} ${t('tour.sqft')}</p>
+            <p class="lmeta mono">${[l.beds ? `${l.beds} ${t('homes.bd')}` : '', l.baths ? `${l.baths} ${t('homes.ba')}` : '', l.sqft ? `${l.sqft.toLocaleString()} ${t('tour.sqft')}` : ''].filter(Boolean).join(' · ')}</p>
             <p class="laddr">${l.street}<br/><span>${l.area}, TX</span></p>
           </div>
         </button>
@@ -54,36 +57,36 @@ export function initListings({ onTour }) {
     return pi + tax + ins
   }
   function open(id) {
-    const l = LISTINGS.find(x => x.id === id); if (!l) return
+    const l = ACTIVE.find(x => x.id === id); if (!l) return
     current = l
     body.innerHTML = `
       <div class="lm-gallery">
-        <img class="lm-main" id="lmMain" src="/img/${l.img[0]}.webp" alt="" />
-        <div class="lm-thumbs">${l.img.map((im, i) => `<button type="button" data-img="${im}" class="${i === 0 ? 'on' : ''}" aria-label="Photo ${i + 1}"><img src="/img/${im}.webp" alt="" loading="lazy" /></button>`).join('')}</div>
+        <img class="lm-main" id="lmMain" src="${imgSrc(l.img[0])}" alt="" />
+        <div class="lm-thumbs">${l.img.map((im, i) => `<button type="button" data-img="${i}" class="${i === 0 ? 'on' : ''}" aria-label="Photo ${i + 1}"><img src="${imgSrc(im)}" alt="" loading="lazy" /></button>`).join('')}</div>
       </div>
       <div class="lm-info">
-        <span class="tag-demo mono">${t('homes.sample')}</span>
+        ${l.real ? '' : `<span class="tag-demo mono">${t('homes.sample')}</span>`}
         <h3 id="lmTitle" class="lm-price">${priceLabel(l)}</h3>
         <p class="laddr">${l.street}<br/><span>${l.area}, TX</span></p>
         <dl class="lm-specs">
           <div><dt>${t('offer.beds')}</dt><dd>${l.beds}</dd></div>
           <div><dt>${t('offer.baths')}</dt><dd>${l.baths}</dd></div>
-          <div><dt>${t('offer.sqft')}</dt><dd>${l.sqft.toLocaleString()}</dd></div>
-          <div><dt>${getLang() === 'es' ? 'Año' : 'Built'}</dt><dd>${l.year}</dd></div>
+          <div><dt>${t('offer.sqft')}</dt><dd>${l.sqft ? l.sqft.toLocaleString() : 'n/a'}</dd></div>
+          ${l.year ? `<div><dt>${getLang() === 'es' ? 'Año' : 'Built'}</dt><dd>${l.year}</dd></div>` : ''}
         </dl>
         <p>${getLang() === 'es' ? l.es : l.en}</p>
         ${l.type !== 'rent' ? `<div class="lm-pay"><span>${t('lm.est')}</span><strong>${money(payment(l.price))}${t('homes.mo')}</strong><small>${t('lm.estD')}</small></div>` : ''}
         <div class="lm-actions">
-          <button type="button" class="btn btn-gold" id="lmTour">${t('lm.tour')} <span aria-hidden="true">→</span></button>
+          ${l.tour ? `<button type="button" class="btn btn-gold" id="lmTour">${t('lm.tour')} <span aria-hidden="true">→</span></button>` : ''}
           <a class="btn btn-ghost-dark" href="tel:${l.type === 'rent' ? '+19154653384' : '+19152680716'}">${t('lm.sched')}</a>
         </div>
-        <p class="fineprint">${t('lm.note')}</p>
+        ${l.real ? '' : `<p class="fineprint">${t('lm.note')}</p>`}
       </div>`
     body.querySelectorAll('[data-img]').forEach(b => b.addEventListener('click', () => {
-      body.querySelector('#lmMain').src = `/img/${b.dataset.img}.webp`
+      body.querySelector('#lmMain').src = imgSrc(l.img[+b.dataset.img])
       body.querySelectorAll('[data-img]').forEach(x => x.classList.toggle('on', x === b))
     }))
-    body.querySelector('#lmTour').addEventListener('click', () => { modal.close(); onTour && onTour(l) })
+    body.querySelector('#lmTour')?.addEventListener('click', () => { modal.close(); onTour && onTour(l) })
     if (!modal.open) modal.showModal()
   }
   grid.addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) open(b.dataset.id) })
@@ -91,6 +94,14 @@ export function initListings({ onTour }) {
   modal.addEventListener('click', e => { if (e.target === modal || e.target.closest('[data-close]')) modal.close() })
   onLang(() => { render(); if (modal.open && current) open(current.id) })
   render()
+  fetch('/api/listings').then(r => (r.ok ? r.json() : null)).then(j => {
+    const real = (j?.listings || []).filter(x => x.photos?.length)
+    if (!real.length) return
+    ACTIVE = real.map(x => ({ ...x, real: true, tour: false, img: x.photos, street: x.street, area: x.area || 'El Paso' }))
+    const sel = form.area, have = new Set([...sel.options].map(o => o.value))
+    ACTIVE.forEach(l => { if (!have.has(l.area)) { sel.add(new Option(l.area, l.area)); have.add(l.area) } })
+    render()
+  }).catch(() => {})
 
   return {
     setFilters({ type, area, max }) {

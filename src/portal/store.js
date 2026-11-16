@@ -85,7 +85,7 @@ export async function signOut(stay = false) { if (sb) await sb.auth.signOut(); s
 // Role of the signed in user: admin / agent / viewer. Demo acts as admin.
 let myRole = MODE === 'demo' ? 'admin' : null
 export const role = () => myRole
-let myOrg = MODE === 'demo' ? 'I AM Real Estate' : null, platform = MODE === 'demo'
+let myOrg = MODE === 'demo' ? 'I AM Real Estate' : null, platform = MODE === 'demo', myOrgId = null
 export const orgName = () => myOrg
 let myBrand = {}
 export const brand = () => (MODE === 'demo' ? (db.settings.demoBrand || {}) : myBrand)
@@ -184,7 +184,7 @@ async function loadRole() {
   try {
     // First run: the API makes the first signed in user admin when the team is empty.
     const r = await fetch('/api/admin/users?me=1', { headers: authHeader() })
-    if (r.ok) { const j = await r.json(); myRole = j.role || null; myOrg = j.org || null; platform = !!j.platform; myBrand = j.brand || {}; return }
+    if (r.ok) { const j = await r.json(); myRole = j.role || null; myOrg = j.org || null; myOrgId = j.orgId || null; platform = !!j.platform; myBrand = j.brand || {}; return }
   } catch {}
   try {
     const { data } = await sb.from('team_members').select('role').eq('user_id', session.user.id).maybeSingle()
@@ -284,7 +284,7 @@ export async function saveInventory(item) {
   if (!item.id) item.id = uid('inv')
   if (i >= 0) db.inventory[i] = item; else db.inventory.unshift(item)
   if (sb) {
-    const row = { address: item.address, zip: item.zip, status: item.status, acquired_on: item.acquiredOn || null, purchase_price: item.purchasePrice, rehab_budget: item.rehabBudget, rehab_actual: item.rehabActual, arv: item.arv, list_price: item.listPrice || null, sold_price: item.soldPrice || null, sold_on: item.soldOn || null, tenant_name: item.tenant || null, monthly_rent: item.rent || null, holding_cost_month: item.holdingMonth || null, notes: item.notes || null }
+    const row = { address: item.address, zip: item.zip, status: item.status, acquired_on: item.acquiredOn || null, purchase_price: item.purchasePrice, rehab_budget: item.rehabBudget, rehab_actual: item.rehabActual, arv: item.arv, list_price: item.listPrice || null, sold_price: item.soldPrice || null, sold_on: item.soldOn || null, tenant_name: item.tenant || null, monthly_rent: item.rent || null, holding_cost_month: item.holdingMonth || null, notes: item.notes || null, ...(item.listing ? { listing: item.listing } : {}) }
     if (isUuid(item.id)) await sb.from('inventory').update(row).eq('id', item.id)
     else { const { data } = await sb.from('inventory').insert(row).select('id').single(); if (data) item.id = data.id }
   }
@@ -434,7 +434,7 @@ async function loadRemote() {
     inventory: (inv || []).map(v => {
       const m = (ms || []).find(x => x.inventory_id === v.id)
       return {
-        id: v.id, address: v.address, zip: v.zip, status: v.status, acquiredOn: v.acquired_on, purchasePrice: +v.purchase_price || 0, rehabBudget: +v.rehab_budget || 0, rehabActual: +v.rehab_actual || 0, arv: +v.arv || 0, listPrice: v.list_price, soldPrice: v.sold_price, soldOn: v.sold_on, tenant: v.tenant_name || '', rent: +v.monthly_rent || 0, holdingMonth: +v.holding_cost_month || 0, docs: v.docs || [], notes: v.notes || '',
+        id: v.id, address: v.address, zip: v.zip, status: v.status, acquiredOn: v.acquired_on, purchasePrice: +v.purchase_price || 0, rehabBudget: +v.rehab_budget || 0, rehabActual: +v.rehab_actual || 0, arv: +v.arv || 0, listPrice: v.list_price, soldPrice: v.sold_price, soldOn: v.sold_on, tenant: v.tenant_name || '', rent: +v.monthly_rent || 0, holdingMonth: +v.holding_cost_month || 0, docs: v.docs || [], notes: v.notes || '', published: !!v.published, listing: v.listing || {}, parcelId: v.parcel_id || null,
         mortgage: m ? { lender: m.lender, last4: m.loan_last4, original: +m.original_amount, rate: +m.interest_rate, payment: +m.monthly_payment, escrow: +m.escrow, dueDay: m.due_day } : null,
         statements: (sts || []).filter(s => s.inventory_id === v.id).map(s => ({ id: s.id, statementDate: s.statement_date, dueDate: s.payment_due_date, amountDue: +s.amount_due, balance: +s.principal_balance, rate: +s.interest_rate, escrow: +s.escrow, lateFee: +s.late_fee, pastDue: +s.past_due_amount, paid: s.paid, fileName: s.file_path })).sort((a, b) => (a.statementDate || '').localeCompare(b.statementDate || '')),
       }
@@ -727,4 +727,35 @@ export async function markCallReviewed(id) {
   c.reviewed = true
   if (sb && isUuid(id)) await sb.from('voice_calls').update({ reviewed: true }).eq('id', id)
   persist(); emit()
+}
+
+// ---------- website listings (publish inventory homes) ----------
+export async function setPublished(id, on) {
+  const v = db.inventory.find(x => x.id === id); if (!v) return
+  v.published = !!on
+  if (sb && isUuid(id)) {
+    const { error } = await sb.from('inventory').update({ published: !!on, published_at: on ? new Date().toISOString() : null }).eq('id', id)
+    if (error) { v.published = !on; throw new Error(/column/i.test(error.message) ? t('pub.e_sql') : t('team.e_error')) }
+  }
+  persist(); emit()
+}
+export async function saveListing(id, listing) {
+  const v = db.inventory.find(x => x.id === id); if (!v) return
+  v.listing = listing
+  if (sb && isUuid(id)) { const { error } = await sb.from('inventory').update({ listing }).eq('id', id); if (error) throw new Error(/column/i.test(error.message) ? t('pub.e_sql') : t('team.e_error')) }
+  persist(); emit()
+}
+// Shrinks a photo in the browser (max 1600 px, JPEG) and uploads it. Demo keeps it in memory.
+export async function uploadListingPhoto(invId, file) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file) })
+  const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight))
+  const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k)
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
+  URL.revokeObjectURL(img.src)
+  if (MODE === 'demo' || !sb) return c.toDataURL('image/jpeg', 0.82)
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.82))
+  const path = `${myOrgId || 'org'}/${invId}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.jpg`
+  const { error } = await sb.storage.from('listing-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+  if (error) throw new Error(t('pub.e_upload'))
+  return sb.storage.from('listing-photos').getPublicUrl(path).data.publicUrl
 }
