@@ -1,9 +1,11 @@
 // Foreclosures and Properties share this view; mode decides the default filters and columns.
 import { t } from '../i18n.js'
 import * as S from '../store.js'
-import { esc, money, date, table, sortRows, scorePill, statusPill, tagPill, selection, selChanged, thumb } from '../ui.js'
+import { esc, money, date, table, sortRows, scorePill, statusPill, tagPill, selection, selChanged, thumb, modal, toast, icon } from '../ui.js'
 import { openDrawer } from '../drawer.js'
 import { mountMap } from '../map.js'
+import { jitter } from './importer.js'
+import * as EP from '../epcad.js'
 
 const state = {
   foreclosures: { f: { sale: '', zip: '', lender: '', eq: '', vmin: '', vmax: '', years: false, absentee: false, tax: false, score: '', status: '' }, sort: { key: 'sale', dir: 1 }, view: 'table' },
@@ -81,13 +83,61 @@ export function leads(el, mode, params = {}) {
     <span class="count-line">${sorted.length} ${esc(t('rows'))} · equity ${money(sorted.reduce((a, p) => a + Math.max(0, p._d.equity), 0), true)}</span>
     <button class="btn sm ghost" data-selall>${esc(t('sel.all'))}</button>
     <span class="sp"></span>
+    <button class="btn sm gold" data-newp>${icon('plus')}${esc(t('np.btn'))}</button>
     <div class="seg"><button data-v="table" class="${st.view === 'table' ? 'on' : ''}">${esc(t('view.table'))}</button><button data-v="map" class="${st.view === 'map' ? 'on' : ''}">${esc(t('view.map'))}</button></div>
   </div>
   ${st.view === 'table' ? tb.html : '<div class="map big" id="lmap"></div>'}`
 
   if (st.view === 'table') tb.bind(el); else mountMap(el.querySelector('#lmap'), sorted, { onOpen: openDrawer })
   el.querySelectorAll('[data-f]').forEach(inp => inp.addEventListener('change', () => { f[inp.dataset.f] = inp.type === 'checkbox' ? inp.checked : inp.value; leads(el, mode) }))
+  el.querySelector('[data-newp]').onclick = () => newProperty(mode)
   el.querySelector('[data-reset]').onclick = () => { for (const k in f) f[k] = typeof f[k] === 'boolean' ? false : ''; leads(el, mode) }
   el.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { st.view = b.dataset.v; leads(el, mode) })
   el.querySelector('[data-selall]').onclick = () => { sorted.forEach(p => selection.add(p.id)); selChanged(); leads(el, mode) }
+}
+
+// Add one property by hand (driving for dollars, a referral, a seller who called, a sign...).
+const SOURCES = ['driving', 'referral', 'call', 'sign', 'other']
+const TAGS = ['vacant', 'absentee', 'probate', 'tax_delinquent', 'foreclosure', 'high_equity']
+function newProperty(mode) {
+  modal(`<h3>${esc(t('np.title'))}</h3><p class="muted" style="margin:0">${esc(t('np.lead'))}</p>
+    <form class="form-grid" data-np>
+      <div class="f full"><label>${esc(t('c.address'))}</label><input name="address" required placeholder="1234 Montana Ave" autocomplete="off"></div>
+      <div class="f"><label>ZIP</label><input name="zip" inputmode="numeric" maxlength="5" placeholder="79903"></div>
+      <div class="f"><label>${esc(t('np.source'))}</label><select name="source">${SOURCES.map(x => `<option value="${x}">${esc(t('np.s_' + x))}</option>`).join('')}</select></div>
+      <div class="f"><label>${esc(t('np.owner'))} <span class="dim">(${esc(t('own.optional'))})</span></label><input name="owner" autocomplete="off"></div>
+      <div class="f"><label>${esc(t('np.phone'))} <span class="dim">(${esc(t('own.optional'))})</span></label><input name="phone" type="tel" autocomplete="off"></div>
+      <div class="f"><label>Email <span class="dim">(${esc(t('own.optional'))})</span></label><input name="email" type="email" autocomplete="off"></div>
+      <div class="f"><label>${esc(t('np.sale'))} <span class="dim">(${esc(t('own.optional'))})</span></label><input name="sale" type="date"></div>
+      <div class="f full"><label>${esc(t('np.tags'))}</label><div class="np-tags">${TAGS.map(x => `<label class="chk"><input type="checkbox" name="tags" value="${x}" ${mode === 'foreclosures' && x === 'foreclosure' ? 'checked' : ''}> ${esc(t('tag.' + x))}</label>`).join('')}</div></div>
+      <div class="f full"><label>${esc(t('d.notes'))}</label><textarea name="notes" rows="2" placeholder="${esc(t('np.notes_ph'))}"></textarea></div>
+      <p class="full muted" style="margin:0;font-size:12.5px">${esc(t('np.auto'))}</p>
+      <div class="full" style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('np.save'))}</button></div>
+    </form>`, (box, close) => {
+    box.querySelector('[data-np]').onsubmit = async e => {
+      e.preventDefault()
+      const fd = new FormData(e.target), v = Object.fromEntries(fd)
+      const tags = fd.getAll('tags')
+      if (v.sale && !tags.includes('foreclosure')) tags.push('foreclosure')
+      const row = {
+        address: v.address.trim().toUpperCase(), zip: v.zip.trim(), tags, notes: v.notes.trim(),
+        owners: v.owner.trim() ? [{ name: v.owner.trim().toUpperCase(), mailing: '', absentee: tags.includes('absentee') }] : [],
+        contacts: [v.phone.trim() && { kind: 'phone', value: v.phone.trim(), provider: 'manual' }, v.email.trim() && { kind: 'email', value: v.email.trim().toLowerCase(), provider: 'manual' }].filter(Boolean),
+        ...(v.sale ? { foreclosure: { saleDate: v.sale } } : {}),
+        ...jitter(v.zip.trim()),
+      }
+      try {
+        const r = await S.importParcels([row], { tag: tags[0] || null, source: 'manual:' + v.source })
+        const p = S.parcels().find(x => x.address === row.address)
+        if (p) {
+          if (tags.length) await S.updateParcel(p.id, { tags: [...new Set([...(p.tags || []), ...tags])] })
+          if (row.notes) await S.addActivity(p.id, 'note', row.notes)
+          const patch = await EP.patchForAsync(p).catch(() => null)
+          if (patch) S.applyEnrichment(p.id, patch)
+        }
+        close(); toast(r.added ? t('np.added') : t('np.updated'))
+        if (p) openDrawer(p.id)
+      } catch { toast(t('team.e_error')) }
+    }
+  })
 }
