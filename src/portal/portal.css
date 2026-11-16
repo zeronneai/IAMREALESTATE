@@ -861,3 +861,42 @@ details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-b
 .pf-kpi small { font-size: 12.5px; color: var(--muted); font-weight: 600; }
 .pf-kpi b { font: 750 26px/1.1 var(--ui); letter-spacing: -.02em; }
 .pf-kpi .muted { font-size: 12.5px; }
+
+/* Market map */
+.mkt { display: grid; gap: 14px; }
+.mk-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; }
+.mk-search { display: flex; align-items: center; gap: 8px; flex: 1 1 320px; border: 1px solid var(--line-2); border-radius: 12px; padding-left: 10px; background: #fff; }
+.mk-search span svg { width: 18px; height: 18px; color: var(--muted); }
+.mk-search input { border: 0; flex: 1; min-width: 0; height: 40px; outline: none; background: none; }
+.mk-search .btn { border-radius: 0 11px 11px 0; height: 42px; }
+.mk-sm { width: auto; min-width: 92px; max-width: 160px; height: 40px; }
+.mk-main { display: grid; grid-template-columns: 1fr 420px; gap: 14px; height: calc(100vh - var(--top) - 170px); min-height: 560px; }
+@media (max-width: 1000px) { .mk-main { grid-template-columns: 1fr; height: auto; } .mk-map { height: 420px; } .mk-list { max-height: none; } }
+.mk-mapwrap { position: relative; min-height: 0; }
+.mk-map { height: 100%; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); }
+.mk-map.owner { cursor: crosshair; }
+.mk-map.owner .leaflet-container, .mk-map.owner.leaflet-container { cursor: crosshair; }
+.mk-tools { position: absolute; top: 12px; right: 12px; z-index: 500; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.mk-tools .btn { box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+.mk-tip { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 500; background: #121110; color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.mk-pin { transform: translate(-50%, -100%); background: #121110; color: #fff; font: 700 12px var(--ui); padding: 4px 8px; border-radius: 999px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.25); border: 2px solid #fff; cursor: pointer; }
+.mk-pin.on { background: #c2432a; transform: translate(-50%, -100%) scale(1.15); }
+.mk-list { overflow-y: auto; min-height: 0; background: #fff; border: 1px solid var(--line); border-radius: 18px; }
+.mk-count { display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: #fff; z-index: 1; flex-wrap: wrap; }
+.mk-card { display: grid; grid-template-columns: 150px 1fr; gap: 12px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 14px; cursor: pointer; font: inherit; color: inherit; }
+.mk-card:hover { background: var(--ink-2); }
+.mk-card img { width: 150px; height: 100px; object-fit: cover; border-radius: 12px; background: var(--ink-2); }
+.mk-info { display: grid; gap: 3px; align-content: start; min-width: 0; }
+.mk-info b { font-size: 19px; letter-spacing: -.01em; }
+.mk-info b small { font-size: 12px; color: var(--muted); font-weight: 600; }
+.mk-info span { font-size: 13.5px; font-weight: 600; }
+.mk-info small { font-size: 12.5px; color: var(--muted); }
+.mk-note { font-size: 11.5px; padding: 12px 16px; margin: 0; }
+.mk-det { display: grid; gap: 12px; }
+.mk-owner { display: grid; gap: 10px; padding: 12px; border-radius: 14px; background: var(--ink-2); }
+.mk-owner-h { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mk-pop { display: grid; gap: 8px; min-width: 260px; }
+.mk-pop .mk-owner { padding: 8px; }
+.mk-pop .va-data { grid-template-columns: 1fr 1fr; gap: 6px 10px; padding: 0; border: 0; }
+.mk-search span { display: grid; place-items: center; }
+.mk-search span svg { fill: none; stroke: currentColor; stroke-width: 2; }
