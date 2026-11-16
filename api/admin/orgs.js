@@ -31,7 +31,8 @@ export async function handle({ method, body = {}, token, env = process.env, fetc
   const mine = (await json(await rest(`team_members?user_id=eq.${user.id}&select=org_id`)))?.[0]?.org_id || null
 
   if (method === 'GET') {
-    const r = await rest('orgs?select=id,name,active,created_at&order=created_at.asc')
+    let r = await rest('orgs?select=id,name,active,created_at,sms_number,email_from,reply_to&order=created_at.asc')
+    if (!r.ok) r = await rest('orgs?select=id,name,active,created_at&order=created_at.asc')
     if (!r.ok) return fail(500, 'db', 'Could not load companies.')
     const orgs = (await json(r)) || []
     for (const o of orgs) {
@@ -83,6 +84,13 @@ export async function handle({ method, body = {}, token, env = process.env, fetc
   if (method === 'PATCH') {
     const patch = {}
     if (body.name != null) { const n = String(body.name).trim().slice(0, 80); if (n.length < 2) return fail(400, 'invalid_name', 'Enter the company name.'); patch.name = n }
+    if (body.sms_number !== undefined) {
+      const d = String(body.sms_number || '').replace(/\D/g, '')
+      patch.sms_number = !d ? null : d.length === 10 ? '+1' + d : d.length === 11 && d[0] === '1' ? '+' + d : undefined
+      if (patch.sms_number === undefined) return fail(400, 'bad_number', 'Enter a 10 digit US number.')
+    }
+    if (body.email_from !== undefined) patch.email_from = String(body.email_from || '').trim().slice(0, 160) || null
+    if (body.reply_to !== undefined) { const v = String(body.reply_to || '').trim().toLowerCase(); if (v && !EMAIL.test(v)) return fail(400, 'invalid_email', 'Enter a valid email.'); patch.reply_to = v || null }
     if (body.active != null) { if (orow.slug === 'iam' && !body.active) return fail(400, 'protected', 'The first company cannot be paused.'); patch.active = !!body.active }
     const r = await rest(`orgs?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
     if (!r.ok) return fail(500, 'db', 'Could not update the company.')

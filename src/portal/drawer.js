@@ -3,6 +3,7 @@ import { t } from './i18n.js'
 import * as S from './store.js'
 import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl, photoBox } from './ui.js'
 import { researchLinks } from './research.js'
+import { startConversation } from './views/inbox.js'
 import * as DNC from './dnc.js'
 import * as EP from './epcad.js'
 
@@ -49,6 +50,7 @@ function render(dr) {
     <div class="muted">${esc([`${p.city || ''}, ${p.state || ''} ${p.zip || ''}`.trim(), p.type, p.epcadId ? 'EPCAD ' + p.epcadId : ''].filter(Boolean).join(' · '))}</div>
     <div class="links" style="margin-top:12px">
       <button class="btn gold sm" data-skip>${icon('phone')}${esc(t('d.skip'))}</button>
+      ${(p.contacts || []).length ? `<button class="btn sm" data-msg>${icon('inbox')}${esc(t('msg.button'))}</button>` : ''}
       <button class="btn sm" data-list>${esc(t('sel.add'))}</button>
       <a class="btn sm ghost" href="${gmaps}" target="_blank" rel="noopener">${esc(t('d.maps'))}</a>
       <button class="btn sm ghost" data-epm>${esc(t('d.epcad_match'))}</button>
@@ -74,7 +76,7 @@ function render(dr) {
       ${(p.owners || []).map(o => `<div class="owner"><b>${esc(o.name)}</b>${o.deceased ? ' <span class="pill gold">Probate</span>' : ''}
         <span class="muted" style="font-size:12.5px">${esc(t('d.mailing'))}: ${esc([o.mailing, o.mailingCity, o.mailingState, o.mailingZip].filter(Boolean).join(', ') || 'n/a')} ${o.absentee ? `<span class="pill blue">${esc(t('d.absentee'))}</span>` : ''}</span></div>`).join('') || `<p class="muted">n/a</p>`}
       <div style="display:grid;gap:8px;margin-top:10px">
-        ${(p.contacts || []).length ? p.contacts.map(c => { const dnc = c.kind === 'phone' && (c.dnc || DNC.isDnc(c.value)); return `<div class="contact">${c.kind === 'phone' ? icon('phone', 'ic') : '@'} ${c.kind === 'phone' && !dnc ? `<a href="tel:${esc(c.value.replace(/\D/g, ''))}">${esc(c.value)}</a> <a class="dim" style="font-size:11px" href="sms:${esc(c.value.replace(/\D/g, ''))}">SMS</a>` : c.kind === 'email' ? `<a href="mailto:${esc(c.value)}">${esc(c.value)}</a>` : `<span class="mono dnc-off">${esc(c.value)}</span>`}
+        ${(p.contacts || []).length ? p.contacts.map(c => { const dnc = c.kind === 'phone' && (c.dnc || DNC.isDnc(c.value)); return `<div class="contact">${c.kind === 'phone' ? icon('phone', 'ic') : '@'} ${c.kind === 'phone' && !dnc ? `<a href="tel:${esc(c.value.replace(/\D/g, ''))}">${esc(c.value)}</a> <button class="linkish" data-sms="${esc(c.value)}">SMS</button>` : c.kind === 'email' ? `<a href="mailto:${esc(c.value)}">${esc(c.value)}</a>` : `<span class="mono dnc-off">${esc(c.value)}</span>`}
           ${c.phoneType ? `<span class="pill">${esc(c.phoneType)}</span>` : ''}${dnc ? `<span class="pill bad">${esc(t('d.dnc'))}</span>` : ''}${c.litigator ? `<span class="pill bad">${esc(t('d.litigator'))}</span>` : ''}${c.confidence ? `<span class="dim mono" style="font-size:11px">${c.confidence}%</span>` : ''}${c.provider ? `<span class="dim" style="font-size:11px">${esc(c.provider)}${c.foundAt ? ' · ' + esc(date(c.foundAt)) : ''}</span>` : ''}${c.kind === 'phone' && !dnc ? `<button class="btn sm ghost" style="height:24px;font-size:11px;margin-left:auto" data-dnc="${esc(c.value)}">${esc(t('dnc.flag'))}</button>` : ''}</div>` }).join('') : `<p class="muted" style="margin:0">${esc(t('d.no_contacts'))}</p>`}
         ${(p.contacts || []).some(c => c.kind === 'phone' && (c.dnc || DNC.isDnc(c.value))) ? `<div class="dnc-note">${esc(t('dnc.blocked'))}</div>` : ''}
         ${(p.contacts || []).some(c => c.kind === 'phone') ? `<div class="muted" style="font-size:11.5px">${esc(t('dnc.reminder'))}</div>` : ''}
@@ -146,6 +148,8 @@ function render(dr) {
   $('.dr-body', dr).scrollTop = keepScroll
   $('[data-x]', dr).onclick = closeDrawer
   dr.querySelectorAll('[data-ph]').forEach(fg => fg.onclick = () => photoBox(p, fg.dataset.ph))
+  dr.querySelectorAll('[data-sms]').forEach(b => b.onclick = () => { closeDrawer(); startConversation(p.id, b.dataset.sms) })
+  $('[data-msg]', dr)?.addEventListener('click', () => { closeDrawer(); startConversation(p.id) })
   $('[data-skip]', dr).onclick = () => skipTrace([p.id])
   $('[data-list]', dr).onclick = () => pickList([p.id])
   dr.querySelectorAll('[data-st]').forEach(b => b.onclick = async () => { const st = b.dataset.st; await S.updateParcel(p.id, { status: st }); await S.addActivity(p.id, 'status', `Status: ${t('st.' + st)}`) })

@@ -63,6 +63,8 @@ export async function init() {
   if (!session) return { ready: false, needsLogin: true }
   await loadRole()
   await loadRemote()
+  loadMessages().catch(() => {})
+  setInterval(() => { if (!document.hidden) loadMessages().catch(() => {}) }, 30000)
   return { ready: true }
 }
 export const client = () => sb
@@ -480,3 +482,67 @@ async function sbUpsertParcel(p) {
   }
 }
 export { derive }
+
+// ---------- conversations (texts + emails) ----------
+let msgs = []
+const msgRow = r => ({ id: r.id, parcelId: r.parcel_id || null, channel: r.channel, dir: r.direction, peer: r.peer, subject: r.subject || '', body: r.body, status: r.status, error: r.error || null, read: r.read !== false, at: r.created_at || new Date().toISOString() })
+const demoMsgs = () => db.messages || (db.messages = [])
+export const messages = () => (MODE === 'demo' ? demoMsgs() : msgs)
+export const unreadCount = () => messages().filter(m => m.dir === 'in' && !m.read).length
+export async function loadMessages() {
+  if (!sb) return
+  const { data, error } = await sb.from('messages').select('*').order('created_at', { ascending: false }).limit(1500)
+  if (error) return
+  const fresh = (data || []).map(msgRow)
+  const changed = fresh.length !== msgs.length || fresh[0]?.id !== msgs[0]?.id || fresh.some((m, i) => m.read !== msgs[i]?.read || m.status !== msgs[i]?.status)
+  msgs = fresh
+  if (changed) emit()
+}
+export function threads() {
+  const map = new Map()
+  for (const m of [...messages()].sort((a, b) => a.at.localeCompare(b.at))) {
+    const key = m.parcelId || m.peer
+    const th = map.get(key) || { key, parcelId: m.parcelId, peers: new Set(), items: [], unread: 0 }
+    th.items.push(m); th.peers.add(m.peer); if (m.dir === 'in' && !m.read) th.unread++
+    th.last = m; map.set(key, th)
+  }
+  return [...map.values()].sort((a, b) => b.last.at.localeCompare(a.last.at))
+}
+const FAKE_REPLIES = { en: ['Who is this?', 'How much would you offer?', 'Not interested, thanks.', 'Call me after 5.'], es: ['¿Quién habla?', '¿Cuánto ofrecen?', 'Llámeme después de las 5.'] }
+export async function sendMessage({ parcelId, channel, to, subject, body, dnc }) {
+  if (MODE === 'demo') {
+    const peer = channel === 'sms' ? to : String(to).toLowerCase()
+    demoMsgs().push({ id: uid('m'), parcelId, channel, dir: 'out', peer, subject, body, status: 'delivered', read: true, at: new Date().toISOString() })
+    persist(); emit()
+    if (channel === 'sms') setTimeout(() => {
+      const list = FAKE_REPLIES[/[áéíóúñ¿]|hola|casa/i.test(body) ? 'es' : 'en']
+      demoMsgs().push({ id: uid('m'), parcelId, channel, dir: 'in', peer, body: list[Math.floor(Math.random() * list.length)], status: 'received', read: false, at: new Date().toISOString() })
+      persist(); emit()
+    }, 2500)
+    return
+  }
+  const r = await fetch('/api/outreach/send', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader() }, body: JSON.stringify({ parcelId: isUuid(parcelId) ? parcelId : null, channel, to, subject, body, dnc: !!dnc }) })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) { const k = 'msg.e_' + (j.code || 'send_failed'); throw new Error(t(k) !== k ? t(k) : t('msg.e_send_failed')) }
+  msgs.unshift(msgRow(j.message)); emit()
+  if (parcelId) addActivity(parcelId, channel === 'sms' ? 'text' : 'email', body.slice(0, 280)).catch(() => {})
+}
+export async function markThreadRead(key) {
+  const ids = messages().filter(m => (m.parcelId || m.peer) === key && m.dir === 'in' && !m.read)
+  if (!ids.length) return
+  ids.forEach(m => { m.read = true })
+  if (sb) await sb.from('messages').update({ read: true }).in('id', ids.map(m => m.id))
+  persist(); emit()
+}
+export const DEFAULT_SMS = {
+  en: [
+    { name: 'First touch', body: 'Hi {{first}}, this is {{agent}} with {{company}}. I saw your property at {{address}} and wanted to ask if you have ever thought about selling. Any interest in a cash offer?' },
+    { name: 'Follow up', body: 'Hi {{first}}, following up about {{address}}. We buy as is, close on your timeline and cover closing costs. Want me to send you a number?' },
+    { name: 'Appointment', body: 'Thanks {{first}}! Does tomorrow work for a quick walkthrough of {{address}}? Morning or afternoon?' },
+  ],
+  es: [
+    { name: 'Primer contacto', body: 'Hola {{first}}, soy {{agent}} de {{company}}. Vi su propiedad en {{address}} y quería preguntarle si ha pensado en venderla. ¿Le interesaría una oferta en efectivo?' },
+    { name: 'Seguimiento', body: 'Hola {{first}}, le doy seguimiento sobre {{address}}. Compramos como está, cerramos cuando usted quiera y cubrimos los gastos de cierre. ¿Le mando una cifra?' },
+    { name: 'Cita', body: '¡Gracias {{first}}! ¿Le queda bien mañana para ver {{address}} rápido? ¿En la mañana o en la tarde?' },
+  ],
+}

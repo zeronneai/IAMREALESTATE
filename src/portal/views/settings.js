@@ -245,11 +245,20 @@ async function renderOrgs(root) {
     <span class="av">${esc(initials(o.name))}</span>
     <div class="who"><b>${esc(o.name)}${o.current ? ` <span class="pill gold" style="margin-left:4px">${esc(t('org.here'))}</span>` : ''}${o.active ? '' : ` <span class="pill bad" style="margin-left:4px">${esc(t('org.paused'))}</span>`}</b>
       <small>${o.members} ${esc(t('org.members'))} · ${o.properties} ${esc(t('org.props'))}${o.created_at ? ' · ' + esc(date(o.created_at)) : ''}</small></div>
-    <div class="acts">${o.current ? '' : `<button class="btn sm" data-enter>${esc(t('org.enter'))}</button>`}<button class="btn sm ghost" data-pause>${esc(t(o.active ? 'org.pause' : 'org.resume'))}</button>${o.current ? '' : `<button class="btn sm ghost danger" data-del>${esc(t('org.delete'))}</button>`}</div>
+    <div class="acts">${o.current ? '' : `<button class="btn sm" data-enter>${esc(t('org.enter'))}</button>`}<button class="btn sm ghost" data-msgcfg>${esc(t('org.msg'))}</button><button class="btn sm ghost" data-pause>${esc(t(o.active ? 'org.pause' : 'org.resume'))}</button>${o.current ? '' : `<button class="btn sm ghost danger" data-del>${esc(t('org.delete'))}</button>`}</div>
   </div>`).join('')
   box.querySelectorAll('.org-row').forEach(row => {
     const o = list.find(x => x.id === row.dataset.id)
     row.querySelector('[data-enter]')?.addEventListener('click', async () => { try { await S.orgEnter(o.id); toast(o.name); renderOrgs(root) } catch (err) { toast(err.message) } })
+    row.querySelector('[data-msgcfg]').onclick = () => modal(`<h3>${esc(t('org.msg'))} · ${esc(o.name)}</h3><p class="muted" style="margin:0">${esc(t('org.msg_hint'))}</p>
+      <form style="display:grid;gap:12px">
+        <div class="f"><label>${esc(t('org.sms_number'))}</label><input name="sms_number" value="${esc(o.sms_number || '')}" placeholder="(915) 555-0123" autocomplete="off"></div>
+        <div class="f"><label>${esc(t('org.email_from'))}</label><input name="email_from" value="${esc(o.email_from || '')}" placeholder="${esc(o.name)} <hello@company.com>" autocomplete="off"></div>
+        <div class="f"><label>${esc(t('org.reply_to'))}</label><input name="reply_to" type="email" value="${esc(o.reply_to || '')}" placeholder="office@company.com" autocomplete="off"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('org.save'))}</button></div>
+      </form>`, (b, close) => {
+      b.querySelector('form').onsubmit = async e => { e.preventDefault(); try { await S.orgUpdate(o.id, Object.fromEntries(new FormData(e.target))); close(); toast(t('org.saved')); renderOrgs(root) } catch (err) { toast(err.message) } }
+    })
     row.querySelector('[data-pause]').onclick = async () => { try { await S.orgUpdate(o.id, { active: !o.active }); toast(t('org.saved')); renderOrgs(root) } catch (err) { toast(err.message) } }
     row.querySelector('[data-del]')?.addEventListener('click', () => modal(`<h3>${esc(t('org.delete'))} ${esc(o.name)}</h3><p class="muted" style="margin:0">${esc(t('org.delete_q'))}</p>
       <form style="display:grid;gap:12px"><input name="c" autocomplete="off" placeholder="${esc(o.name)}" required />
