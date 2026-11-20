@@ -915,3 +915,26 @@ details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-b
 .ppl-two .drop p { word-break: break-all; }
 .seg-mini button small { font-weight: 500; margin-left: 2px; }
 @media (max-width: 720px) { .ppl-two { grid-template-columns: 1fr; } }
+/* calendar */
+.cal-wrap { overflow-x: auto; }
+.cal-grid { display: grid; grid-template-columns: 56px repeat(7, minmax(120px, 1fr)); min-width: 900px; }
+.cal-dh { height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-bottom: 1px solid var(--line); gap: 2px; }
+.cal-dh small { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
+.cal-day { border-left: 1px solid var(--line); }
+.cal-day.today .cal-dh b { background: var(--brand, var(--text)); color: var(--brand-ink, #fff); border-radius: 999px; padding: 1px 8px; }
+.cal-h { border-bottom: 1px solid var(--line); text-align: right; padding-right: 6px; }
+.cal-h small { position: relative; top: -7px; color: var(--dim); font-size: 10.5px; }
+.cal-col { position: relative; cursor: copy; background-image: linear-gradient(var(--line) 1px, transparent 1px); background-size: 100% 44px; }
+.cal-pos { position: absolute; left: 3px; right: 3px; }
+.cal-ev { display: flex; flex-direction: column; gap: 1px; width: 100%; height: 100%; text-align: left; border: 0; border-left: 3px solid var(--brand, #b8902e); background: rgba(184,144,46,.13); border-radius: 6px; padding: 3px 6px; overflow: hidden; cursor: pointer; font-size: 11.5px; color: inherit; }
+.cal-ev b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ev small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ev.k-call { border-left-color: #3a6ea5; background: rgba(58,110,165,.12); }
+.cal-ev.k-closing { border-left-color: #2e7d4f; background: rgba(46,125,79,.12); }
+.cal-ev.k-inspection { border-left-color: #8a5a9e; background: rgba(138,90,158,.12); }
+.cal-ev.s-done, .cal-ev.s-cancelled { opacity: .5; }
+.cal-ev.s-cancelled b { text-decoration: line-through; }
+.cal-lh { margin: 16px 0 6px; font-size: 13px; text-transform: capitalize; }
+.cal-lh:first-child { margin-top: 0; }
+.cal-li { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.cal-li .cal-ev { height: auto; flex: 1; padding: 8px 10px; font-size: 13px; }

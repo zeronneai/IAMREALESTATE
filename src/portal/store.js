@@ -990,3 +990,43 @@ export async function importPeople(list, onStep = () => {}) {
   await loadPeople(true)
   return { saved, capped: false }
 }
+
+// ---------- calendar (showings, calls, closings) ----------
+let appts = [], apptsLoaded = false
+const apptRow = r => ({ id: r.id, title: r.title, kind: r.kind, start: r.starts_at, end: r.ends_at, location: r.location || '', personId: r.person_id, invId: r.inventory_id, parcelId: r.parcel_id, withName: r.with_name || '', withPhone: r.with_phone || '', assigned: r.assigned_name || '', status: r.status, remind: r.remind !== false, remindMin: r.remind_minutes ?? 60, remindedAt: r.reminded_at, notes: r.notes || '' })
+const apptDb = a => ({ title: a.title, kind: a.kind || 'showing', starts_at: a.start, ends_at: a.end || null, location: a.location || null, person_id: isUuid(a.personId) ? a.personId : null, inventory_id: isUuid(a.invId) ? a.invId : null, parcel_id: isUuid(a.parcelId) ? a.parcelId : null, with_name: a.withName || null, with_phone: a.withPhone || null, assigned_name: a.assigned || null, status: a.status || 'scheduled', remind: !!a.remind, remind_minutes: +a.remindMin || 60, notes: a.notes || null })
+function demoAppts() {
+  if (!db.appts) {
+    const at = (d, h, m = 0) => { const x = new Date(); x.setDate(x.getDate() + d); x.setHours(h, m, 0, 0); return x.toISOString() }
+    const end = (s, min) => new Date(new Date(s).getTime() + min * 60e3).toISOString()
+    const p = demoPeople()
+    const mk = (d, h, m, kind, title, per, loc, status = 'scheduled', who = 'Robert') => { const s = at(d, h, m); return { id: uid('ap'), title, kind, start: s, end: end(s, kind === 'call' ? 15 : 45), location: loc, personId: per?.id || null, invId: null, parcelId: null, withName: per?.name || '', withPhone: per?.phone || '', assigned: who, status, remind: true, remindMin: 60, remindedAt: null, notes: '' } }
+    db.appts = [
+      mk(0, 16, 0, 'showing', 'Showing 760 Villa Seca', p[1], '760 Villa Seca Dr, Horizon City'), mk(1, 10, 30, 'call', 'Qualify buyer', p[0], 'Phone', 'scheduled', 'Dante'),
+      mk(1, 15, 0, 'showing', 'Showing 3515 Dyer', p[2], '3515 Dyer St', 'confirmed'), mk(2, 11, 0, 'inspection', 'Inspection 9848 Bomarc', null, '9848 Bomarc St', 'scheduled', 'Hugo'),
+      mk(3, 17, 0, 'showing', 'Rental showing 7211 Alameda #10', p[6], '7211 Alameda Ave #10'), mk(-1, 13, 0, 'closing', 'Closing 3572 Greenveil', null, 'Title company', 'done', 'Angeline'),
+    ]
+  }
+  return db.appts
+}
+export const appointments = () => (MODE === 'demo' ? demoAppts() : appts)
+export async function loadAppointments(force = false) {
+  if (MODE === 'demo' || !sb || (apptsLoaded && !force)) return
+  const { data, error } = await sb.from('appointments').select('*').gte('starts_at', new Date(Date.now() - 90 * 864e5).toISOString()).order('starts_at').limit(2000)
+  if (error) { const e = new Error(/relation|schema cache/i.test(error.message) ? t('cal.e_sql') : error.message); throw e }
+  appts = (data || []).map(apptRow); apptsLoaded = true; emit()
+}
+export async function saveAppointment(a) {
+  if (MODE === 'demo' || !sb) { const l = demoAppts(); const ex = l.find(x => x.id === a.id); if (ex) Object.assign(ex, a, { remindedAt: ex.start !== a.start ? null : ex.remindedAt }); else l.push({ ...a, id: uid('ap'), remindedAt: null }); persist(); emit(); return }
+  const row = apptDb(a)
+  const old = appts.find(x => x.id === a.id)
+  if (old && old.start !== a.start) row.reminded_at = null // moved: remind again
+  const q = isUuid(a.id) ? sb.from('appointments').update(row).eq('id', a.id).select('*').single() : sb.from('appointments').insert(row).select('*').single()
+  const { data, error } = await q
+  if (error) throw new Error(/relation|schema cache|column/i.test(error.message) ? t('cal.e_sql') + ' (' + error.message + ')' : error.message)
+  const v = apptRow(data), i = appts.findIndex(x => x.id === v.id); if (i >= 0) appts[i] = v; else appts.push(v); emit()
+}
+export async function deleteAppointment(id) {
+  if (MODE === 'demo' || !sb) { db.appts = demoAppts().filter(x => x.id !== id); persist(); emit(); return }
+  await sb.from('appointments').delete().eq('id', id); appts = appts.filter(x => x.id !== id); emit()
+}

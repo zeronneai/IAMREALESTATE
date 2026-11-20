@@ -4,6 +4,7 @@ import * as S from '../store.js'
 import { esc, money, toast, modal, icon } from '../ui.js'
 import { parseGhlContacts, parseGhlPipelines, applyStages } from '../parse/ghl.js'
 import { startPeerConversation } from './inbox.js'
+import { apptModal } from './calendar.js'
 
 const KINDS = ['buyer', 'seller', 'renter', 'investor', 'agent', 'other']
 // Same stages I AM uses in HighLevel today.
@@ -75,13 +76,14 @@ export function personModal(person, done) {
       <div class="f full"><label>${esc(t('d.notes'))}</label><textarea name="notes" rows="3">${esc(p.notes)}</textarea></div>
       <label class="chk full"><input type="checkbox" name="dnd" ${p.dnd ? 'checked' : ''}> ${esc(t('ppl.dnd'))}</label>
       <div class="full" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
-        <span style="display:flex;gap:8px">${person ? `<button type="button" class="btn ghost danger" data-del>${esc(t('org.delete'))}</button>` : ''}${person && p.phone && !p.dnd ? `<button type="button" class="btn ghost" data-text>${icon('inbox')}${esc(t('ppl.text'))}</button>` : ''}${person && p.email ? `<button type="button" class="btn ghost" data-mail>${icon('mail')}${esc(t('ppl.mail'))}</button>` : ''}</span>
+        <span style="display:flex;gap:8px">${person ? `<button type="button" class="btn ghost danger" data-del>${esc(t('org.delete'))}</button>` : ''}${person && p.phone && !p.dnd ? `<button type="button" class="btn ghost" data-text>${icon('inbox')}${esc(t('ppl.text'))}</button>` : ''}${person ? `<button type="button" class="btn ghost" data-appt>${icon('calendar')}${esc(t('cal.book'))}</button>` : ''}${person && p.email ? `<button type="button" class="btn ghost" data-mail>${icon('mail')}${esc(t('ppl.mail'))}</button>` : ''}</span>
         <span style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('org.save'))}</button></span></div>
     </form>`, (box, close) => {
     const f = box.querySelector('[data-f]')
     f.kind.onchange = () => { f.stage.innerHTML = `<option value="">n/a</option>` + stageOpts(f.kind.value).map(s => `<option>${esc(s)}</option>`).join('') }
     box.querySelector('[data-del]')?.addEventListener('click', async () => { await S.deletePerson(p.id); close(); toast(t('org.deleted')); done() })
     box.querySelector('[data-text]')?.addEventListener('click', () => { close(); startPeerConversation(p.phone, 'sms') })
+    box.querySelector('[data-appt]')?.addEventListener('click', () => { close(); apptModal(null, done, { personId: p.id, withName: p.name, withPhone: p.phone, title: (p.kind === 'renter' ? 'Rental showing' : p.kind === 'buyer' ? 'Showing' : 'Call') + ' · ' + (p.name || '') , kind: p.kind === 'seller' ? 'call' : 'showing' }) })
     box.querySelector('[data-mail]')?.addEventListener('click', () => { close(); startPeerConversation(p.email, 'email') })
     f.onsubmit = async e => {
       e.preventDefault()

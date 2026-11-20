@@ -26,5 +26,10 @@ export default async function handler(req, res) {
   await stopOnReply(org, from, 'sms')
   if (STOP_WORDS.test(text)) await db.rest('opt_outs', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates' }, body: JSON.stringify({ org_id: org, channel: 'sms', peer: from }) })
   else if (START_WORDS.test(text)) await db.rest(`opt_outs?org_id=eq.${org}&channel=eq.sms&peer=eq.${encodeURIComponent(from)}`, { method: 'DELETE' })
+  // "C" (or yes / confirm / sí) after a reminder confirms their next appointment.
+  else if (/^\s*(c|confirm|confirmed|yes|y|si|sí|ok)\s*[.!]?\s*$/i.test(text)) {
+    const ap = (await (await db.rest(`appointments?org_id=eq.${org}&with_phone=eq.${encodeURIComponent(from)}&status=eq.scheduled&starts_at=gt.${encodeURIComponent(new Date().toISOString())}&order=starts_at.asc&limit=1&select=id`)).json().catch(() => []))?.[0]
+    if (ap) await db.rest(`appointments?id=eq.${ap.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'confirmed' }) })
+  }
   return empty()
 }
