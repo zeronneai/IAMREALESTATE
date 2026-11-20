@@ -15,9 +15,31 @@ let rec = null, listening = false, spokeLast = false
 const MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>'
 const vLang = () => (getLang() === 'es' ? 'es-MX' : 'en-US')
 const plain = s => String(s).replace(/[*#`_>]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\n{2,}/g, '. ').replace(/\n/g, ' ')
-export function speak(text) {
+// Cartesia voices, the same service as the AI phone agent. Falls back to the browser voice.
+let cart = { state: 'idle', voices: [] }, audio = null, talkId = 0
+async function loadVoices(el) {
+  if (cart.state !== 'idle' || S.MODE === 'demo') return
+  cart.state = 'loading'
+  try { const r = await fetch('/api/voice/voices', { headers: S.authHeader() }); if (!r.ok) throw 0; cart = { state: 'ready', voices: (await r.json()).voices || [] } } catch { cart.state = 'off' }
+  if (document.body.contains(el)) paintVoices(el)
+}
+const lang2 = () => (getLang() === 'es' ? 'es' : 'en')
+// Which Cartesia voice: the one picked here, else the agent's voice for this language, else the first one.
+function cartVoice() {
+  if (cart.state !== 'ready' || st.voiceId === 'browser') return ''
+  const l = lang2(), cfg = S.voiceConfig?.() || {}
+  const ok = id => id && cart.voices.some(v => v.id === id)
+  return (ok(st.voiceId) && st.voiceId) || (ok(cfg['voice_' + l]) && cfg['voice_' + l]) || cart.voices.find(v => v.language.startsWith(l))?.id || ''
+}
+function paintVoices(el) {
+  const sel = el.querySelector('[data-vsel]'); if (!sel) return
+  const l = lang2(), list = cart.state === 'ready' ? cart.voices.filter(v => v.language.startsWith(l)) : []
+  sel.innerHTML = `<option value="">${esc(t('jv.v_agent'))}</option>${list.map(v => `<option value="${esc(v.id)}">${esc(v.name)}${v.gender ? ' · ' + esc(v.gender) : ''}</option>`).join('')}<option value="browser">${esc(t('jv.v_browser'))}</option>`
+  sel.value = st.voiceId && [...sel.options].some(o => o.value === st.voiceId) ? st.voiceId : ''
+}
+export function stopTalk() { talkId++; try { audio?.pause() } catch {} audio = null; if (canSpeak) speechSynthesis.cancel() }
+function browserSpeak(text) {
   if (!canSpeak) return
-  speechSynthesis.cancel()
   const lang = vLang(), voices = speechSynthesis.getVoices()
   const voice = voices.find(v => v.lang === lang) || voices.find(v => v.lang?.startsWith(lang.slice(0, 2)))
   // Chrome stops long utterances, so read it sentence by sentence.
@@ -27,10 +49,32 @@ export function speak(text) {
     speechSynthesis.speak(u)
   }
 }
+export async function speak(text) {
+  stopTalk(); const me = talkId, v = cartVoice()
+  if (!v) return browserSpeak(text)
+  // Cartesia takes up to 900 characters per call: send it in chunks that end on a sentence.
+  const chunks = [], parts = plain(text).match(/[^.!?]+[.!?]*/g) || []
+  let cur = ''
+  for (const p of parts) { if ((cur + p).length > 850 && cur) { chunks.push(cur); cur = '' } cur += p }
+  if (cur.trim()) chunks.push(cur)
+  let next = null
+  const get = c => fetch('/api/voice/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...S.authHeader() }, body: JSON.stringify({ text: c.trim().slice(0, 900), lang: lang2(), voice: v }) }).then(r => { if (!r.ok) throw 0; return r.blob() })
+  try {
+    for (let i = 0; i < chunks.length; i++) {
+      const blob = await (next || get(chunks[i]))
+      next = i + 1 < chunks.length ? get(chunks[i + 1]) : null   // fetch the next part while this one plays
+      if (me !== talkId) return
+      const url = URL.createObjectURL(blob)
+      await new Promise(res => { audio = new Audio(url); audio.onended = audio.onerror = res; audio.play().catch(res) })
+      URL.revokeObjectURL(url)
+      if (me !== talkId) return
+    }
+  } catch { if (me === talkId) browserSpeak(chunks.join(' ')) }
+}
 function toggleMic(el) {
   if (!SR) return toast(t('jv.no_mic'))
   if (listening) { rec?.stop(); return }
-  if (canSpeak) speechSynthesis.cancel()
+  stopTalk()
   rec = new SR(); rec.lang = vLang(); rec.interimResults = true; rec.continuous = false
   let text = ''
   rec.onresult = e => { text = Array.from(e.results).map(r => r[0].transcript).join(' '); const ta = el.querySelector('[data-in]'); if (ta) ta.value = text }
@@ -88,7 +132,8 @@ export function jarvisView(el) {
       <button class="btn gold" data-new style="width:100%">${icon('plus')}${esc(t('jv.new'))}</button>
       <div class="jv-list">${st.chats.map(c => `<button class="jv-item ${c.id === st.cur ? 'on' : ''}" data-c="${esc(c.id)}"><b>${esc(c.title || t('jv.untitled'))}</b><small>${esc(new Date(c.at).toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' }))}</small></button>`).join('') || `<p class="muted" style="font-size:13px">${esc(t('jv.none'))}</p>`}</div>
       <label class="chk" style="font-size:13px"><input type="checkbox" data-ctx ${st.ctx ? 'checked' : ''}> ${esc(t('jv.ctx'))}</label>
-      ${canSpeak ? `<label class="chk jv-voice"><input type="checkbox" data-voice ${st.voice ? 'checked' : ''}> ${esc(t('jv.voice'))}</label>` : ''}
+      ${canSpeak ? `<label class="chk jv-voice"><input type="checkbox" data-voice ${st.voice ? 'checked' : ''}> ${esc(t('jv.voice'))}</label>
+      <div class="f jv-vpick"><label>${esc(t('jv.v_pick'))}</label><select data-vsel><option value="">${esc(t('jv.v_agent'))}</option><option value="browser">${esc(t('jv.v_browser'))}</option></select></div>` : ''}
       <small class="dim">${esc(t('jv.private'))}</small>
     </aside>
     <section class="jv-main card">
@@ -102,9 +147,11 @@ export function jarvisView(el) {
   el.querySelector('[data-new]').onclick = () => { st.cur = null; save(st); jarvisView(el); el.querySelector('[data-in]')?.focus() }
   el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { st.cur = b.dataset.c; save(st); jarvisView(el) })
   el.querySelector('[data-ctx]').onchange = e => { st.ctx = e.target.checked; save(st) }
-  el.querySelector('[data-voice]')?.addEventListener('change', e => { st.voice = e.target.checked; save(st); if (!st.voice && canSpeak) speechSynthesis.cancel() })
+  el.querySelector('[data-voice]')?.addEventListener('change', e => { st.voice = e.target.checked; save(st); if (!st.voice) stopTalk() })
+  const vsel = el.querySelector('[data-vsel]')
+  if (vsel) { paintVoices(el); loadVoices(el); vsel.onchange = () => { st.voiceId = vsel.value; save(st); speak(t('jv.v_sample')) } }
   el.querySelector('[data-mic]').onclick = () => toggleMic(el)
-  el.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { if (canSpeak && speechSynthesis.speaking) { speechSynthesis.cancel(); return } speak(chat.msgs[+b.dataset.say].content) })
+  el.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { if (audio || (canSpeak && speechSynthesis.speaking)) { stopTalk(); return } speak(chat.msgs[+b.dataset.say].content) })
   el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => ask(el, b.dataset.q))
   const ta = el.querySelector('[data-in]'), f = el.querySelector('[data-f]')
   ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); f.requestSubmit() } }

@@ -108,6 +108,12 @@ export function publishEditor(v, { publishAfter = true } = {}) {
         <div class="f"><label>${esc(t('pub.baths'))}</label><input name="baths" type="number" step="0.5" value="${esc(L.baths)}"></div>
         <div class="f"><label>${esc(t('pub.sqft'))}</label><input name="sqft" type="number" step="10" value="${esc(L.sqft)}"></div>
         <div class="f"><label>${esc(t('pub.year'))}</label><input name="year" type="number" step="1" value="${esc(L.year)}"></div>
+        ${L.type !== 'rent' ? `<div class="full pub-terms"><label class="chk"><input type="checkbox" name="owner_finance" ${L.owner_finance ? 'checked' : ''}> ${esc(t('pub.of'))}</label>
+          <div class="f"><label>${esc(t('pub.down'))}</label><input name="down" type="number" step="100" value="${esc(L.down ?? '')}"></div>
+          <div class="f"><label>${esc(t('pub.monthly'))}</label><input name="monthly" type="number" step="10" value="${esc(L.monthly ?? '')}"></div>
+          <div class="f"><label>${esc(t('pub.rate'))}</label><input name="rate" type="number" step="0.01" value="${esc(L.rate ?? '')}"></div>
+          <div class="f"><label>${esc(t('pub.term'))}</label><input name="term_years" type="number" step="1" value="${esc(L.term_years ?? '')}"></div>
+          <div class="f full"><label>${esc(t('pub.terms_note'))}</label><input name="terms_note" value="${esc(L.terms_note || '')}" placeholder="${esc(t('pub.terms_ph'))}"></div></div>` : ''}
         <div class="f full"><label>${esc(t('pub.desc_en'))}</label><textarea name="desc_en" rows="2" placeholder="${esc(t('pub.desc_ph'))}">${esc(L.desc_en)}</textarea></div>
         <div class="f full"><label>${esc(t('pub.desc_es'))}</label><textarea name="desc_es" rows="2">${esc(L.desc_es)}</textarea></div>
         <div class="f full"><label>${esc(t('pub.photos'))} · ${L.photos.length}</label>
@@ -118,7 +124,7 @@ export function publishEditor(v, { publishAfter = true } = {}) {
           <span style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(publishAfter && !v.published ? t('pub.publish') : t('org.save'))}</button></span></div>
       </form>`
       const f = box.querySelector('[data-pf]')
-      const sync = () => { const fd = Object.fromEntries(new FormData(f)); Object.assign(L, fd) }
+      const sync = () => { const fd = Object.fromEntries(new FormData(f)); if (f.querySelector('[name=owner_finance]')) fd.owner_finance = !!fd.owner_finance; Object.assign(L, fd) }
       f.querySelector('[name=type]').onchange = () => { sync(); paint() }
       f.querySelector('[data-files]').onchange = async e => {
         sync(); const files = [...e.target.files].slice(0, 20 - L.photos.length)
@@ -131,7 +137,7 @@ export function publishEditor(v, { publishAfter = true } = {}) {
       f.onsubmit = async e => {
         e.preventDefault(); sync()
         const num = k => (L[k] === '' || L[k] == null ? null : +L[k])
-        const listing = { type: L.type, price: num('price'), beds: num('beds'), baths: num('baths'), sqft: num('sqft'), year: num('year'), area: L.area || '', desc_en: String(L.desc_en || '').trim(), desc_es: String(L.desc_es || '').trim(), photos: L.photos }
+        const listing = { ...(v.listing || {}), owner_finance: !!L.owner_finance, down: num('down'), monthly: num('monthly'), rate: num('rate'), term_years: num('term_years'), terms_note: String(L.terms_note || '').trim(), type: L.type, price: num('price'), beds: num('beds'), baths: num('baths'), sqft: num('sqft'), year: num('year'), area: L.area || '', desc_en: String(L.desc_en || '').trim(), desc_es: String(L.desc_es || '').trim(), photos: L.photos }
         if (publishAfter && !listing.photos.length) return toast(t('pub.need_photo'))
         try {
           await S.saveListing(v.id, listing)

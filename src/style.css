@@ -535,3 +535,11 @@ details[open] .plus { background: var(--gold); } details[open] .plus::before { b
 .lprice-ask { font-size: .8em; letter-spacing: .01em; }
 .mark-img { height: 34px; width: auto; display: block; }
 footer .mark-img { height: 30px; }
+/* Seller terms (owner finance) from the portal */
+.lterms { margin: 6px 0 0; font-size: 12.5px; font-weight: 600; color: #b8860b; }
+.lm-terms { border: 1px solid rgba(184,134,11,.45); background: rgba(245,194,27,.08); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; }
+.lm-terms b { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+.lm-terms dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin: 0; }
+.lm-terms dt { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--dark-muted); }
+.lm-terms dd { margin: 2px 0 0; font: 600 18px var(--display); }
+.lm-terms small { color: var(--dark-muted); }

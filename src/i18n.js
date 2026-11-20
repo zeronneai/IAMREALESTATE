@@ -103,6 +103,8 @@ export const dict = {
   'lm.ask': ['Ask about this home', 'Preguntar por esta casa'],
   'lm.sched': ['Schedule a showing', 'Agendar visita'],
   'lm.note': ['Demo listing. Address, price and details are fictional.', 'Propiedad demo. Dirección, precio y detalles son ficticios.'],
+  'lm.of': ['Owner financing', 'Financiamiento del dueño'], 'lm.terms': ['Terms', 'Términos'], 'lm.down': ['down', 'de enganche'], 'lm.down_l': ['Down payment', 'Enganche'],
+  'lm.monthly': ['Monthly', 'Mensualidad'], 'lm.rate': ['Rate', 'Tasa'], 'lm.years': ['Term', 'Plazo'],
   'lm.est': ['Est. payment', 'Pago estimado'],
   'lm.estD': ['with 3.5% down, 6.5% rate, 30 yr, taxes and insurance', 'con 3.5% de enganche, tasa 6.5%, 30 años, impuestos y seguro'],
 

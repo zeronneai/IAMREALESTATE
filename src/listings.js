@@ -46,9 +46,20 @@ export function initListings({ onTour }) {
             <div class="lcard-top"><span class="lprice">${priceLabel(l)}</span><span class="ltype">${typeLabel(l.type)}</span></div>
             <p class="lmeta mono">${[l.beds ? `${l.beds} ${t('homes.bd')}` : '', l.baths ? `${l.baths} ${t('homes.ba')}` : '', l.sqft ? `${l.sqft.toLocaleString()} ${t('tour.sqft')}` : ''].filter(Boolean).join(' · ')}</p>
             <p class="laddr">${l.street}<br/><span>${l.area}, TX</span></p>
+            ${termLine(l) ? `<p class="lterms">${termLine(l)}</p>` : ''}
           </div>
         </button>
       </article>`).join('') : `<p class="empty">${t('homes.none')}</p>`
+  }
+  // Seller terms typed in the portal (owner finance, down, monthly, rate, years).
+  function hasTerms(l) { const x = l.terms || {}; return x.ownerFinance || x.down || x.monthly || x.rate || x.years || x.note }
+  function termLine(l) {
+    const x = l.terms || {}; if (l.type === 'rent' || !hasTerms(l)) return ''
+    return [x.ownerFinance ? t('lm.of') : '', x.down ? `${money(x.down)} ${t('lm.down')}` : '', x.monthly ? `${money(x.monthly)}${t('homes.mo')}` : ''].filter(Boolean).join(' · ')
+  }
+  function termsBox(l) {
+    const x = l.terms || {}, row = (k, v) => v ? `<div><dt>${t(k)}</dt><dd>${v}</dd></div>` : ''
+    return `<div class="lm-terms"><b>${t(x.ownerFinance ? 'lm.of' : 'lm.terms')}</b><dl>${row('lm.down_l', x.down ? money(x.down) : '')}${row('lm.monthly', x.monthly ? money(x.monthly) : '')}${row('lm.rate', x.rate ? x.rate + '%' : '')}${row('lm.years', x.years ? x.years + (getLang() === 'es' ? ' años' : ' yrs') : '')}</dl>${x.note ? `<small>${x.note.replace(/[<>&]/g, '')}</small>` : ''}</div>`
   }
   function payment(price) {
     const loan = price * 0.965, r = 0.065 / 12, n = 360
@@ -75,7 +86,8 @@ export function initListings({ onTour }) {
           ${l.year ? `<div><dt>${getLang() === 'es' ? 'Año' : 'Built'}</dt><dd>${l.year}</dd></div>` : ''}
         </dl>
         <p>${getLang() === 'es' ? l.es : l.en}</p>
-        ${l.type !== 'rent' && l.price ? `<div class="lm-pay"><span>${t('lm.est')}</span><strong>${money(payment(l.price))}${t('homes.mo')}</strong><small>${t('lm.estD')}</small></div>` : ''}
+        ${l.type !== 'rent' && hasTerms(l) ? termsBox(l) : ''}
+        ${l.type !== 'rent' && l.price && !hasTerms(l) ? `<div class="lm-pay"><span>${t('lm.est')}</span><strong>${money(payment(l.price))}${t('homes.mo')}</strong><small>${t('lm.estD')}</small></div>` : ''}
         <div class="lm-actions">
           ${l.tour ? `<button type="button" class="btn btn-gold" id="lmTour">${t('lm.tour')} <span aria-hidden="true">→</span></button>` : ''}
           <a class="btn btn-ghost-dark" href="tel:${l.type === 'rent' ? '+19154653384' : '+19152680716'}">${t('lm.sched')}</a>

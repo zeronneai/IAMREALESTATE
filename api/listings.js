@@ -19,6 +19,7 @@ export default async function handler(req, res) {
       type: ['sale', 'rent', 'multi'].includes(l.type) ? l.type : (v.status === 'rented' ? 'rent' : 'sale'),
       price: num(l.price) || 0, beds: num(l.beds) || 0, baths: num(l.baths) || 0, sqft: num(l.sqft) || 0, year: num(l.year),
       en: String(l.desc_en || '').slice(0, 1200), es: String(l.desc_es || l.desc_en || '').slice(0, 1200),
+      terms: { ownerFinance: !!l.owner_finance, down: num(l.down), monthly: num(l.monthly), rate: num(l.rate), years: num(l.term_years), note: String(l.terms_note || '').slice(0, 200) },
       photos: (l.photos || []).filter(u => /^https:\/\//.test(u)).slice(0, 20),
     }
   })
