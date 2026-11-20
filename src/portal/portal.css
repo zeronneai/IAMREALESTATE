@@ -939,3 +939,148 @@ details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-b
 .cal-li { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .cal-li .cal-ev { height: auto; flex: 1; padding: 8px 10px; font-size: 13px; }
 .mk-zoomtip { bottom: auto; top: 58px; background: rgba(18,17,16,.86); font-weight: 500; }
+.mk-img { height: 30px; width: auto; display: block; }
+.brand .mk-img { height: 32px; }
+.boot .mk-img { height: 56px; }
+
+/* =====================================================================
+   Dark theme (black with yellow outlines), requested by I AM. On by default; toggle in the top bar.
+   ===================================================================== */
+html.dark {
+  --ink: #050505; --ink-1: #0e0e0d; --ink-2: #151513; --ink-3: #1d1c19; --ink-4: #2a2823;
+  --line: rgba(245, 194, 27, 0.20); --line-2: rgba(245, 194, 27, 0.38);
+  --gold: #f5c21b; --gold-2: #ffd54a; --gold-3: #8a6a0a; --gold-soft: rgba(245, 194, 27, 0.14);
+  --text: #f4f1ea; --muted: #b3ab9b; --dim: #8a8376;
+  --ok: #4cc174; --warn: #f0a93a; --bad: #ff6b4f; --blue: #6aa8ff;
+  --sh: 0 0 0 1px rgba(245,194,27,.10), 0 8px 28px rgba(0,0,0,.5);
+  --sh-2: 0 0 0 1px rgba(245,194,27,.22), 0 24px 60px rgba(0,0,0,.7);
+  color-scheme: dark;
+}
+html.dark .alert,
+html.dark .batch .btn,
+html.dark .brand-picks button,
+html.dark .brand-prev,
+html.dark .bub.in,
+html.dark .burger,
+html.dark .check,
+html.dark .chip,
+html.dark .dr-head,
+html.dark .drop,
+html.dark .drop:hover,
+html.dark .drop.over,
+html.dark .dt tbody tr.sel td,
+html.dark .dt tbody tr:hover td,
+html.dark .dt th,
+html.dark .f select,
+html.dark .f input,
+html.dark .inp,
+html.dark .inline-form input,
+html.dark .inline-form textarea,
+html.dark textarea.notes,
+html.dark .tpl textarea,
+html.dark .login input,
+html.dark .ib-comp,
+html.dark .ib-comp .seg button,
+html.dark .lang,
+html.dark .leaflet-bar a,
+html.dark .leaflet-control-attribution,
+html.dark .leaflet-popup-content-wrapper,
+html.dark .leaflet-popup-tip,
+html.dark .list-item.on,
+html.dark .login .box,
+html.dark .mail-prev,
+html.dark .member select,
+html.dark .menu-pop,
+html.dark .mk-count,
+html.dark .mk-list,
+html.dark .mk-search,
+html.dark .modal .box,
+html.dark .pf-kpi,
+html.dark .photos figcaption,
+html.dark .photos figure,
+html.dark .pub-ph span,
+html.dark .pub-toggle,
+html.dark .pub-toggle .pt-knob,
+html.dark .raw pre,
+html.dark .review-item,
+html.dark .search input,
+html.dark .search-res,
+html.dark .sec,
+html.dark .seg button.on,
+html.dark .seg-mini button,
+html.dark .side,
+html.dark .steps button,
+html.dark .thumb,
+html.dark .tl-row:hover,
+html.dark /* Website publishing */ .pub-banner,
+html.dark /* buttons: pills */ .btn,
+html.dark /* cards */ .card,
+html.dark .kpi,
+html.dark .tablewrap,
+html.dark .inv,
+html.dark /* lists,
+html.dark inventory */ .list-item,
+html.dark /* pills + chips: soft tints */ .pill,
+html.dark /* sidebar */ .side { background: var(--ink-1); }
+html.dark .alert,
+html.dark .alert.bad,
+html.dark .chip,
+html.dark .member .av,
+html.dark .nav a,
+html.dark .pill.bad,
+html.dark .pill.gold,
+html.dark .pill.warn,
+html.dark .seg button,
+html.dark .steps button,
+html.dark /* pills + chips: soft tints */ .pill { color: var(--muted); }
+html.dark .side { background: #000; border-right: 1px solid var(--line-2); }
+html.dark .card, html.dark .kpi, html.dark .tablewrap, html.dark .inv, html.dark .sec, html.dark .modal .box, html.dark .login .box, html.dark .list-item, html.dark .pf-kpi { border: 1px solid var(--line-2); }
+html.dark .nav a { color: var(--muted); }
+html.dark .nav a:hover { background: var(--ink-2); color: var(--text); }
+html.dark .nav a.on { background: transparent; color: var(--gold); box-shadow: inset 0 0 0 1.5px var(--gold); }
+html.dark .nav a.on svg { stroke: var(--gold); }
+html.dark .nav a.on .count { color: #000; background: var(--gold); }
+html.dark .btn { background: transparent; color: var(--text); border-color: var(--line-2); }
+html.dark .btn:hover { border-color: var(--gold); color: var(--gold); }
+html.dark .btn.gold { background: var(--gold); color: #000; border-color: var(--gold); box-shadow: 0 4px 18px rgba(245,194,27,.25); }
+html.dark .btn.gold:hover { color: #000; filter: brightness(1.08); }
+html.dark .btn.ghost { background: transparent; }
+html.dark .chip.on, html.dark .lang button.on, html.dark .seg-mini button.on, html.dark .steps button.on, html.dark .seg button.on { background: var(--gold); color: #000; border-color: var(--gold); }
+html.dark .kpi.hero, html.dark .countdown, html.dark .batch, html.dark .toast, html.dark .adv-banner { background: #000; color: var(--text); border: 1px solid var(--gold); }
+html.dark .toast { color: var(--gold); }
+html.dark .pill { background: var(--ink-3); color: var(--muted); }
+html.dark .pill.ok { background: rgba(76,193,116,.14); color: #6fe09a; }
+html.dark .pill.gold { background: rgba(245,194,27,.16); color: var(--gold); }
+html.dark .pill.bad { background: rgba(255,107,79,.15); color: #ff8a73; }
+html.dark .pill.warn { background: rgba(240,169,58,.15); color: #ffc06a; }
+html.dark .pill.blue { background: rgba(106,168,255,.14); color: #8fbdff; }
+html.dark input, html.dark select, html.dark textarea { background: var(--ink-2); color: var(--text); border-color: var(--line-2); }
+html.dark input::placeholder, html.dark textarea::placeholder { color: var(--dim); }
+html.dark .dt th, html.dark .seq-tbl th { background: var(--ink-2); color: var(--muted); border-bottom-color: var(--line-2); }
+html.dark .dt tbody tr:hover td, html.dark .seq-tbl tr:hover td { background: var(--ink-2); }
+html.dark .dt td, html.dark .seq-tbl td { border-color: var(--line); }
+html.dark .ribbon { background: var(--gold); color: #000; }
+html.dark .ribbon .demo-tag { background: #000; color: var(--gold); }
+html.dark .alert { background: var(--ink-2); color: var(--muted); border: 1px solid var(--line); }
+html.dark .alert.bad { background: rgba(255,107,79,.10); color: #ff8a73; border-color: rgba(255,107,79,.35); }
+html.dark .drop { background: var(--ink-2); border-color: var(--line-2); }
+html.dark .drop:hover, html.dark .drop.over { background: rgba(245,194,27,.08); border-color: var(--gold); }
+html.dark .bub.out { background: var(--gold); color: #000; }
+html.dark .bub.in { background: var(--ink-2); border-color: var(--line-2); color: var(--text); }
+html.dark .leaflet-popup-content-wrapper, html.dark .leaflet-popup-tip, html.dark .leaflet-bar a { background: var(--ink-1); color: var(--text); }
+html.dark .leaflet-control-attribution { background: rgba(0,0,0,.7) !important; }
+html.dark .mk-tip { background: #000; color: var(--gold); border: 1px solid var(--gold); }
+html.dark .cal-ev { background: rgba(245,194,27,.12); color: var(--text); }
+html.dark .cal-day.today .cal-dh b { background: var(--gold); color: #000; }
+html.dark .pf-bar { background: var(--ink-3); }
+html.dark .pf-bar i { background: var(--gold); }
+html.dark .modal { background: rgba(0,0,0,.72); }
+html.dark a { color: var(--gold); }
+html.dark .mk, html.dark .mk .i { color: var(--gold); }
+html.dark .member .av { background: var(--ink-3); color: var(--gold); }
+.theme-tg { width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; display: grid; place-items: center; cursor: pointer; color: var(--text); }
+.theme-tg svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+html.dark .top { background: rgba(5,5,5,.88); border-bottom: 1px solid var(--line); }
+html.dark .top h1 { color: var(--text); }
+html.dark .acct .av { background: var(--gold); color: #000; }
+html.dark .search input { background: var(--ink-1); border-color: var(--line-2); }

@@ -533,3 +533,5 @@ details[open] .plus { background: var(--gold); } details[open] .plus::before { b
 .chat-panel.voice .chat-log, .chat-panel.voice .chat-quick, .chat-panel.voice .chat-input { display: none; }
 .chat-panel.voice .vc-open { display: none; }
 .lprice-ask { font-size: .8em; letter-spacing: .01em; }
+.mark-img { height: 34px; width: auto; display: block; }
+footer .mark-img { height: 30px; }

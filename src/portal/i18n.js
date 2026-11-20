@@ -407,6 +407,7 @@ const D = {
   'brand.e_sql': ['Run brand.sql in Supabase first.', 'Primero corre brand.sql en Supabase.'],
   'nav.inbox': ['Conversations', 'Conversaciones'],
   'nav.contacts': ['Contacts', 'Contactos'],
+  'theme.toggle': ['Light or dark mode', 'Modo claro u oscuro'],
   'nav.calendar': ['Calendar', 'Calendario'],
   'cal.e_sql': ['Run calendar.sql in Supabase first.', 'Primero corre calendar.sql en Supabase.'], 'cal.today': ['Today', 'Hoy'], 'cal.week': ['Week', 'Semana'], 'cal.list': ['List', 'Lista'],
   'cal.new': ['New appointment', 'Nueva cita'], 'cal.edit': ['Appointment', 'Cita'], 'cal.book': ['Book appointment', 'Agendar cita'], 'cal.empty': ['No upcoming appointments.', 'No hay citas próximas.'],

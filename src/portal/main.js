@@ -80,6 +80,7 @@ function shell() {
         <button class="burger" aria-label="menu" data-burger>${icon('menu')}</button>
         <h1 id="title"></h1>
         <div class="search">${icon('search')}<input id="q" type="search" autocomplete="off" placeholder="${esc(t('search'))}" aria-label="${esc(t('search'))}" /><div class="search-res" id="qres" hidden></div></div>
+        <button class="theme-tg" data-theme title="${esc(t('theme.toggle'))}" aria-label="${esc(t('theme.toggle'))}">${document.documentElement.classList.contains('dark') ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>'}</button>
         <div class="lang"><button data-lang="en" class="${getLang() === 'en' ? 'on' : ''}">EN</button><button data-lang="es" class="${getLang() === 'es' ? 'on' : ''}">ES</button></div>
       </header>
       <main class="view" id="view"></main>
@@ -87,6 +88,7 @@ function shell() {
   </div>`
   $('[data-acct]').onclick = e => acctMenu(e.currentTarget)
   $$('[data-lang]').forEach(b => b.onclick = () => setLang(b.dataset.lang))
+  $('[data-theme]')?.addEventListener('click', () => { const dark = !document.documentElement.classList.contains('dark'); document.documentElement.classList.toggle('dark', dark); try { localStorage.setItem('iam_theme', dark ? 'dark' : 'light') } catch {} ; shell(); route() })
   $('[data-burger]').onclick = () => $('#side').classList.toggle('open')
   $$('.nav a').forEach(a => a.addEventListener('click', () => $('#side').classList.remove('open')))
   const q = $('#q'), res = $('#qres')
@@ -155,7 +157,7 @@ function login(opts = {}) {
   app.className = ''
   document.body.classList.remove('has-ribbon')
   app.innerHTML = `<div class="login"><form class="box fade-in" novalidate>
-    <span class="mk" style="font-size:30px;justify-self:start">${'<span class="i">I</span>AM'}</span>
+    <img class="mk-img" src="/img/iam-logo.png" srcset="/img/iam-logo.png 1x, /img/iam-logo@2x.png 2x" alt="I AM" style="height:44px;justify-self:start">
     <div style="display:grid;gap:6px;margin:8px 0 6px"><h2>${esc(t('login.title'))}</h2><p class="muted" style="margin:0">${esc(t('login.hint'))}</p></div>
     <div class="f"><label for="le">${esc(t('login.email'))}</label><input id="le" type="email" name="email" required autocomplete="username" inputmode="email" /></div>
     <div class="f"><label for="lp">${esc(t('login.password'))}</label><input id="lp" type="password" name="password" required autocomplete="current-password" /></div>
@@ -197,7 +199,7 @@ export { toast }
 function brandMark() {
   const b = S.brand(), name = S.orgName()
   const iam = !name || /^i am real estate$/i.test(name)
+  if (iam) return `<a class="brand" href="/" title="iamrealestate"><img class="mk-img" src="/img/iam-logo.png" srcset="/img/iam-logo.png 1x, /img/iam-logo@2x.png 2x" alt="I AM"><small>${esc(t('brand.sub'))}</small></a>`
   if (b.logo) return `<a class="brand has-logo" href="#/dashboard" title="${esc(name || '')}"><img src="${esc(b.logo)}" alt="${esc(name || '')}"><small>${esc(iam ? t('brand.sub') : name)}</small></a>`
-  if (iam) return `<a class="brand" href="/" title="iamrealestate"><span class="mk"><span class="i">I</span>AM</span><small>${esc(t('brand.sub'))}</small></a>`
   return `<a class="brand" href="#/dashboard"><span class="mk org-name">${esc(name)}</span><small>${esc(t('brand.sub'))}</small></a>`
 }

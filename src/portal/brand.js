@@ -54,6 +54,11 @@ export function applyBrand(b = {}) {
   if (!b.color || !/^#[0-9a-f]{6}$/i.test(b.color)) props.forEach(p => root.removeProperty(p))
   else {
     let c = b.color.toLowerCase()
+    const dark = document.documentElement.classList.contains('dark')
+    if (dark) { // black and yellow theme: keep the brand color bright and the soft tones dark
+      root.setProperty('--brand', c); root.setProperty('--brand-ink', lum(c) > 0.42 ? '#000000' : '#ffffff')
+      root.setProperty('--gold', c); root.setProperty('--gold-2', mix(c, '#ffffff', 0.25)); root.setProperty('--gold-3', mix(c, '#000000', 0.45)); root.setProperty('--gold-soft', mix(c, '#000000', 0.82))
+    } else {
     while (lum(c) > 0.6) c = mix(c, '#000000', 0.15)
     root.setProperty('--brand', c)
     root.setProperty('--brand-ink', lum(c) > 0.42 ? '#121110' : '#ffffff')
@@ -61,6 +66,7 @@ export function applyBrand(b = {}) {
     root.setProperty('--gold-2', mix(c, '#000000', 0.3))
     root.setProperty('--gold-3', mix(c, '#ffffff', 0.55))
     root.setProperty('--gold-soft', mix(c, '#ffffff', 0.88))
+    }
   }
   let link = document.querySelector('link[rel="icon"]')
   if (b.logo) {
