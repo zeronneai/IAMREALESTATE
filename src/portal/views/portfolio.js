@@ -3,6 +3,7 @@ import { t, getLang } from '../i18n.js'
 import * as S from '../store.js'
 import { esc, money, date, toast, modal, icon } from '../ui.js'
 import { parseGhlOpportunities } from '../parse/ghl.js'
+import { parseRentRedi, matchRent } from '../parse/rentredi.js'
 const SITS = ['normal', 'payment_plan', 'eviction', 'foreclosure', 'vacant', 'disconnected']
 
 const KINDS = ['rent', 'mortgage', 'wrap', 'loan', 'tax', 'insurance', 'hoa', 'utility', 'repair', 'other']
@@ -168,7 +169,7 @@ export function financeView(el) {
     </div>`
   el.innerHTML = `
   <div class="pf-month fade-in"><div class="seg-mini"><button data-tab="out" class="${finTab === 'out' ? 'on' : ''}">${esc(t('fin.to_pay'))}</button><button data-tab="in" class="${finTab === 'in' ? 'on' : ''}">${esc(t('fin.to_collect'))}</button></div>
-    <span class="sp"></span><button class="btn sm gold" data-bill>${icon('plus')}${esc(finTab === 'in' ? t('pf.add_item') : t('fin.add_bill'))}</button></div>
+    <span class="sp"></span>${finTab === 'in' ? `<button class="btn sm ghost" data-rr>${icon('upload')}${esc(t('rr.import'))}</button>` : ''}<button class="btn sm gold" data-bill>${icon('plus')}${esc(finTab === 'in' ? t('pf.add_item') : t('fin.add_bill'))}</button></div>
   <div class="pf-kpis fade-in">
     <div class="pf-kpi"><small>${esc(t('fin.g_late'))}</small><b class="${groups[0][1].length ? 'neg' : ''}">${money(sum(groups[0][1], i => i.amount))}</b><span class="muted">${groups[0][1].length} ${esc(t('fin.items'))}</span></div>
     <div class="pf-kpi"><small>${esc(t('fin.g_week'))}</small><b>${money(sum(groups[1][1], i => i.amount))}</b><span class="muted">${groups[1][1].length} ${esc(t('fin.items'))}</span></div>
@@ -177,6 +178,7 @@ export function financeView(el) {
   </div>
   ${groups.map(([g, l]) => l.length ? `<div class="card fade-in fin-group"><h3>${esc(t(g === 'done' && finTab === 'in' ? 'fin.g_done_in' : 'fin.g_' + g))} <span class="muted" style="font-weight:500">· ${l.length}</span></h3>${l.map(row).join('')}</div>` : '').join('') || `<div class="card"><p class="muted">${esc(t('fin.empty'))}</p></div>`}`
   el.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { finTab = b.dataset.tab; financeView(el) })
+  el.querySelector('[data-rr]')?.addEventListener('click', () => rentRediModal(() => financeView(el)))
   el.querySelector('[data-bill]').onclick = () => oblModal(null, finTab === 'in' ? S.inventory()[0]?.id || null : null, () => financeView(el), finTab === 'in' ? { kind: 'rent', freq: 'monthly' } : null)
   el.querySelectorAll('[data-k]').forEach(r => r.querySelector('[data-k2]').onclick = () => { const [oid, per] = r.dataset.k.split('|'); const it = S.periodItems(per).find(i => i.ob.id === oid); if (it) payModal(it, () => financeView(el)) })
 }
@@ -201,6 +203,48 @@ function ghlModal(done) {
       prev.querySelector('[data-go]').onclick = async ev => {
         const b = ev.currentTarget; b.disabled = true
         try { const res = await S.importObligations(r.items, (n, tot) => { b.textContent = `${n} / ${tot}` }); close(); toast(`${t('pf.ghl_done')}: ${res.saved} · ${res.made} ${t('pf.ghl_homes')} · ${res.paid} ${t('pf.st_paid').toLowerCase()}`); done() } catch (err) { b.disabled = false; toast(err.message) }
+      }
+    }
+  }, { wide: true })
+}
+
+// ---------- Import from RentRedi (all of I AM's rents are collected there) ----------
+function rentRediModal(done) {
+  modal(`<h3>${esc(t('rr.title'))}</h3><p class="muted" style="margin:0">${esc(t('rr.lead'))}</p>
+    <label class="drop" style="cursor:pointer">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>CSV</p><input type="file" accept=".csv,text/csv" hidden data-file></label>
+    <div data-prev></div>`, (box, close) => {
+    box.querySelector('[data-file]').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return
+      const r = parseRentRedi(await f.text()), prev = box.querySelector('[data-prev]')
+      if (r.error) { prev.innerHTML = `<div class="alert bad">${esc(t('rr.bad'))}</div>`; return }
+      // Rent items for every month the file covers, so each payment lands on its own month.
+      const months = [...new Set(r.pays.map(x => x.date.slice(0, 7) + '-01'))]
+      const cache = Object.fromEntries(months.map(m => [m, S.periodItems(m).filter(i => i.ob.kind === 'rent')]))
+      const rentOpts = S.obligations().filter(o => o.kind === 'rent' && o.active)
+      const rows = r.pays.map(x => { const it = matchRent(x, cache[x.date.slice(0, 7) + '-01'] || []); return { ...x, obId: it?.ob.id || '', already: !!it?.pay } })
+      const label = o => { const v = S.inventory().find(h => h.id === o.invId); return `${v?.address || ''}${o.unit ? ' ' + o.unit : ''}${o.party ? ' · ' + o.party : ''}` }
+      const opts = sel => `<option value="">${esc(t('rr.skip'))}</option>` + rentOpts.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? 'selected' : ''}>${esc(label(o))}</option>`).join('')
+      const ok = rows.filter(x => x.obId).length
+      prev.innerHTML = `<div class="alert">${r.pays.length} ${esc(t('rr.pays'))} · <b>${ok}</b> ${esc(t('rr.matched'))} · ${r.pays.length - ok} ${esc(t('rr.unmatched'))}${r.skipped.length ? ` · ${r.skipped.length} ${esc(t('rr.ignored'))}` : ''}</div>
+        <p class="muted" style="margin:0">${esc(t('rr.note'))}</p>
+        <div class="tbl-wrap" style="max-height:320px;overflow:auto"><table class="seq-tbl"><tbody>${rows.map((x, i) => `<tr><td><small>${esc(date(x.date))}</small></td><td><b>${esc(x.tenant)}</b><small class="dim" style="display:block">${esc(x.property)}${x.unit ? ' #' + esc(x.unit) : ''}</small></td><td class="num">${money(x.amount)}</td><td><select data-i="${i}" style="max-width:280px">${opts(x.obId)}</select>${x.already ? ` <small class="dim">${esc(t('rr.already'))}</small>` : ''}</td></tr>`).join('')}</tbody></table></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost" data-x>${esc(t('cancel'))}</button><button class="btn gold" data-go>${esc(t('rr.go'))}</button></div>`
+      prev.querySelectorAll('[data-i]').forEach(s2 => s2.onchange = () => { rows[+s2.dataset.i].obId = s2.value })
+      prev.querySelector('[data-x]').onclick = close
+      prev.querySelector('[data-go]').onclick = async ev => {
+        const b = ev.currentTarget; b.disabled = true; let n = 0, skip = 0
+        try {
+          for (const x of rows) {
+            if (!x.obId) { skip++; continue }
+            const per = x.date.slice(0, 7) + '-01', it = S.periodItems(per).find(i => i.ob.id === x.obId)
+            if (!it) { skip++; continue }
+            const paid = (it.pay?.paid || 0) + (it.pay && it.pay.reference === x.ref ? 0 : x.amount)
+            if (it.pay && x.ref && it.pay.reference === x.ref) { skip++; continue }
+            await S.recordPayment(it, { paid, paidOn: x.date, method: 'RentRedi', reference: x.ref || '', notes: it.pay ? (it.pay.notes ? it.pay.notes + ' + ' : '') + 'RentRedi' : 'RentRedi' })
+            n++; b.textContent = `${n} / ${rows.length}`
+          }
+          close(); toast(`${t('rr.done')}: ${n}${skip ? ` · ${skip} ${t('rr.unmatched')}` : ''}`); done()
+        } catch (err) { b.disabled = false; toast(err.message) }
       }
     }
   }, { wide: true })

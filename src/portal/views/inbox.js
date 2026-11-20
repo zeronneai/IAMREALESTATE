@@ -27,9 +27,18 @@ export function startConversation(parcelId, to, channel = 'sms') {
   location.hash = '#/inbox'
 }
 
+// Open Conversations with a contact (buyer, renter...) by phone or email, with or without earlier messages.
+export function startPeerConversation(peer, channel = 'sms') {
+  const d = String(peer || '').replace(/\D/g, '')
+  const key = channel === 'email' ? String(peer).toLowerCase() : d.length === 10 ? '+1' + d : '+' + d
+  cur = key; draft = { channel, to: key, subject: '', body: '' }
+  location.hash = '#/inbox'
+}
+
 export function inbox(el) {
   unsub?.(); unsub = S.onChange(() => { if (document.body.contains(el)) paint(el, true); else { unsub?.(); unsub = null } })
   S.loadMessages().catch(() => {})
+  S.loadPeople().catch(() => {})
   paint(el)
 }
 
@@ -44,11 +53,13 @@ function paint(el, soft = false) {
   const th = ths.find(x => x.key === cur)
   const p = th?.parcelId ? S.parcel(th.parcelId) : (cur ? S.parcel(cur) : null)
   const keepScroll = el.querySelector('.ib-list')?.scrollTop || 0
+  const person = !p ? S.personByPeer(th ? th.last.peer : cur) : null
+  const loose = !p && !th && cur && (/^\+\d{8,}$/.test(cur) || cur.includes('@')) ? cur : ''
 
-  const list = ths.map(x => { const xp = x.parcelId && S.parcel(x.parcelId); const who = xp ? (xp.owners?.[0]?.name || xp.address) : fmtPhone(x.last.peer)
+  const list = ths.map(x => { const xp = x.parcelId && S.parcel(x.parcelId); const xper = !xp && S.personByPeer(x.last.peer); const who = xp ? (xp.owners?.[0]?.name || xp.address) : (xper?.name || fmtPhone(x.last.peer))
     return `<button class="ib-th ${x.key === cur ? 'on' : ''}" data-k="${esc(x.key)}">
       <div class="ib-top"><b>${esc(who)}</b><small>${esc(time(x.last.at))}</small></div>
-      <div class="ib-sub">${esc(xp ? xp.address : '')}</div>
+      <div class="ib-sub">${esc(xp ? xp.address : xper ? t('ppl.k1_' + xper.kind) + (xper.stage ? ' · ' + xper.stage : '') : '')}</div>
       <div class="ib-last">${x.last.dir === 'out' ? `<span class="dim">${esc(t('msg.you'))}: </span>` : ''}${esc(x.last.body.slice(0, 90))}${x.unread ? `<span class="ib-dot">${x.unread}</span>` : ''}</div>
     </button>` }).join('') || `<p class="muted" style="padding:16px">${esc(t('msg.empty'))}</p>`
 
@@ -56,6 +67,8 @@ function paint(el, soft = false) {
   const optedOut = new Set(S.messages().filter(m => m.dir === 'in' && /^\s*(stop|stopall|unsubscribe|cancel|end|quit|remove|alto|parar|baja)\b/i.test(m.body)).map(m => m.peer.replace(/\D/g, '').slice(-10)))
   const peers = draft.channel === 'sms' ? phones.map(c => ({ v: c.value, label: fmtPhone(c.value) + (c.phoneType ? ' · ' + c.phoneType : ''), blocked: c.blocked || optedOut.has(c.value.replace(/\D/g, '').slice(-10)) })) : emails.map(c => ({ v: c.value, label: c.value, blocked: false }))
   if (th) for (const pe of th.peers) if (!peers.some(x => draft.channel === 'sms' ? sameNum(x.v, pe) : x.v.toLowerCase() === pe)) if ((draft.channel === 'sms') === pe.startsWith('+')) peers.push({ v: pe, label: draft.channel === 'sms' ? fmtPhone(pe) : pe, blocked: optedOut.has(pe.replace(/\D/g, '').slice(-10)) })
+  if (!p && person) { if (draft.channel === 'sms' && person.phone && !peers.some(x => sameNum(x.v, person.phone))) peers.push({ v: person.phone, label: fmtPhone(person.phone), blocked: person.dnd || optedOut.has(person.phone.replace(/\D/g, '').slice(-10)) }); if (draft.channel === 'email' && person.email && !peers.some(x => x.v === person.email)) peers.push({ v: person.email, label: person.email, blocked: false }) }
+  if (loose && !peers.some(x => x.v === loose) && (draft.channel === 'sms') === loose.startsWith('+')) peers.push({ v: loose, label: draft.channel === 'sms' ? fmtPhone(loose) : loose, blocked: optedOut.has(loose.replace(/\D/g, '').slice(-10)) })
   if (!draft.to || !peers.some(x => x.v === draft.to)) draft.to = (peers.find(x => !x.blocked) || peers[0])?.v || ''
   const sel = peers.find(x => x.v === draft.to)
   const tpls = (S.settings().smsTemplates?.[getLang()] || S.DEFAULT_SMS[getLang()])
@@ -68,7 +81,7 @@ function paint(el, soft = false) {
   el.innerHTML = `<div class="inbox card fade-in" style="padding:0">
     <aside class="ib-side"><div class="ib-head"><b>${esc(t('msg.threads'))}</b>${S.unreadCount() ? `<span class="pill gold">${S.unreadCount()} ${esc(t('msg.unread'))}</span>` : ''}</div><div class="ib-list">${list}</div></aside>
     <section class="ib-main">
-      ${p || th ? `<header class="ib-mhead"><div><b>${esc(p ? (p.owners?.[0]?.name || p.address) : fmtPhone(th.last.peer))}</b><small>${esc(p ? `${p.address}, ${p.city || 'El Paso'} ${p.zip || ''}` : '')}</small></div>${p ? `<button class="btn sm ghost" data-open>${esc(t('msg.open_prop'))}</button>` : ''}</header>
+      ${p || th || loose ? `<header class="ib-mhead"><div><b>${esc(p ? (p.owners?.[0]?.name || p.address) : person?.name || fmtPhone(th ? th.last.peer : loose))}</b><small>${esc(p ? `${p.address}, ${p.city || 'El Paso'} ${p.zip || ''}` : person ? t('ppl.k1_' + person.kind) + (person.stage ? ' · ' + person.stage : '') : '')}</small></div>${p ? `<button class="btn sm ghost" data-open>${esc(t('msg.open_prop'))}</button>` : ''}</header>
       <div class="ib-msgs" data-msgs>${bubbles || `<p class="muted" style="margin:auto;text-align:center">${esc(t('msg.start'))}</p>`}</div>
       <form class="ib-comp" data-send>
         <div class="ib-row">

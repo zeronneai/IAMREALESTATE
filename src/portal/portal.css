@@ -900,3 +900,18 @@ details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-b
 .mk-pop .va-data { grid-template-columns: 1fr 1fr; gap: 6px 10px; padding: 0; border: 0; }
 .mk-search span { display: grid; place-items: center; }
 .mk-search span svg { fill: none; stroke: currentColor; stroke-width: 2; }
+
+/* Short screens (laptops): the menu scrolls and gets tighter so Settings is always reachable. */
+.side { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.side .nav { flex: none; }
+.side-foot { flex: none; }
+@media (max-height: 900px) { .nav a { padding: 6px 10px; } .brand { padding-bottom: 10px; margin-bottom: 6px; } }
+@media (max-height: 760px) { .nav a { padding: 4px 10px; font-size: 13px; } .brand small { display: none; } }
+.ppl-stages { display: flex; gap: 6px; flex-wrap: wrap; margin: -4px 0 12px; }
+.ppl-bar { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.ppl-bar input { flex: 1; max-width: 420px; }
+.ppl-pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px; border-top: 1px solid var(--line); }
+.ppl-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ppl-two .drop p { word-break: break-all; }
+.seg-mini button small { font-weight: 500; margin-left: 2px; }
+@media (max-width: 720px) { .ppl-two { grid-template-columns: 1fr; } }

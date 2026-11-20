@@ -879,7 +879,7 @@ export async function saveObligation(ob) {
 // Bulk import (HighLevel): creates missing homes, then upserts obligations by their HighLevel reference
 // and records this month's payment for the ones HighLevel shows as Paid.
 export async function importObligations(list, onStep = () => {}) {
-  const norm = a => String(a || '').toUpperCase().replace(/[.,#]/g, ' ').replace(/\s+/g, ' ').trim()
+  const norm = a => String(a || '').toUpperCase().replace(/[.,#&-]/g, ' ').replace(/\s+/g, ' ').trim()
   const homes = new Map(inventory().map(v => [norm(v.address).split(' ').slice(0, 2).join(' '), v]))
   let made = 0, saved = 0, paid = 0
   for (const it of list) {
@@ -925,4 +925,68 @@ export function suggestedObligations(v) {
   if (v.rent) s.push({ invId: v.id, kind: 'rent', dir: 'in', party: v.tenant || '', amount: v.rent, freq: 'monthly', dueDay: 1, grace: 5 })
   if (v.mortgage?.payment) s.push({ invId: v.id, kind: 'mortgage', dir: 'out', party: v.mortgage.lender || '', amount: v.mortgage.payment, freq: 'monthly', dueDay: v.mortgage.dueDay || 1, grace: 15, account: v.mortgage.last4 ? '••' + v.mortgage.last4 : '' })
   return s
+}
+
+// ---------- contacts (people who are not owners: buyers, sellers, renters...) ----------
+let ppl = [], pplLoaded = false
+const personRow = r => ({ id: r.id, first: r.first_name || '', last: r.last_name || '', name: r.name || [r.first_name, r.last_name].filter(Boolean).join(' '), phone: r.phone || '', email: r.email || '', business: r.business || '', kind: r.kind || 'other', stage: r.stage || '', value: r.value == null ? null : +r.value, tags: r.tags || [], source: r.source || '', notes: r.notes || '', dnd: !!r.dnd, extRef: r.ext_ref || '', lastActivity: r.last_activity || null, createdAt: r.created_at || null })
+const personDb = p => ({ first_name: p.first || null, last_name: p.last || null, name: p.name || [p.first, p.last].filter(Boolean).join(' ') || null, phone: p.phone || null, email: p.email ? String(p.email).toLowerCase() : null, business: p.business || null, kind: p.kind || 'other', stage: p.stage || null, value: p.value === '' || p.value == null ? null : +p.value, tags: p.tags || [], source: p.source || null, notes: p.notes || null, dnd: !!p.dnd, ext_ref: p.extRef || null, last_activity: p.lastActivity || null, updated_at: new Date().toISOString() })
+function demoPeople() {
+  if (!db.people) {
+    const mk = (first, last, phone, kind, stage, value, tags = []) => ({ id: uid('per'), first, last, name: `${first} ${last}`, phone, email: `${first.toLowerCase()}.${last.toLowerCase()}@example.com`, business: '', kind, stage, value, tags, source: 'Demo', notes: '', dnd: false, extRef: '', lastActivity: new Date(Date.now() - Math.random() * 20 * 864e5).toISOString(), createdAt: new Date().toISOString() })
+    db.people = [
+      mk('Demo', 'Buyer One', '+19155550111', 'buyer', 'New Buyer Lead', 0, ['facebook']), mk('Demo', 'Buyer Two', '+19155550112', 'buyer', 'Actively Looking', 25000, ['owner financing']),
+      mk('Demo', 'Buyer Three', '+19155550113', 'buyer', 'Under Contract', 30000), mk('Demo', 'Seller One', '+19155550121', 'seller', 'New Seller Lead', 0),
+      mk('Demo', 'Seller Two', '+19155550122', 'seller', 'Offer Sent', 0), mk('Demo', 'Renter One', '+19155550131', 'renter', 'New Renter Lead', 0),
+      mk('Demo', 'Renter Two', '+19155550132', 'renter', 'Showing Scheduled', 0), mk('Demo', 'Agent One', '+19155550141', 'agent', '', 0, ['realtor']),
+    ]
+  }
+  return db.people
+}
+export const people = () => (MODE === 'demo' ? demoPeople() : ppl)
+export async function loadPeople(force = false) {
+  if (MODE === 'demo' || !sb || (pplLoaded && !force)) return
+  const out = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb.from('people').select('*').order('last_activity', { ascending: false, nullsFirst: false }).range(from, from + 999)
+    if (error) { const e = new Error(/relation|schema cache/i.test(error.message) ? t('ppl.e_sql') : error.message); e.code = 'sql'; throw e }
+    out.push(...(data || []).map(personRow))
+    if (!data || data.length < 1000) break
+  }
+  ppl = out; pplLoaded = true; emit()
+}
+const last10 = s => String(s || '').replace(/\D/g, '').slice(-10)
+export function personByPeer(peer) {
+  if (!peer) return null
+  const k = String(peer).includes('@') ? String(peer).toLowerCase() : last10(peer)
+  return people().find(p => (k.includes('@') ? p.email === k : k.length === 10 && last10(p.phone) === k)) || null
+}
+export async function savePerson(p) {
+  if (MODE === 'demo' || !sb) { const l = demoPeople(); const ex = l.find(x => x.id === p.id); if (ex) Object.assign(ex, p); else l.unshift({ ...p, id: uid('per'), createdAt: new Date().toISOString() }); persist(); emit(); return }
+  const row = personDb(p)
+  const q = isUuid(p.id) ? sb.from('people').update(row).eq('id', p.id).select('*').single() : sb.from('people').insert(row).select('*').single()
+  const { data, error } = await q
+  if (error) throw new Error(/relation|schema cache|column/i.test(error.message) ? t('ppl.e_sql') + ' (' + error.message + ')' : error.message)
+  const v = personRow(data), i = ppl.findIndex(x => x.id === v.id); if (i >= 0) ppl[i] = v; else ppl.unshift(v); emit()
+}
+export async function deletePerson(id) {
+  if (MODE === 'demo' || !sb) { db.people = demoPeople().filter(x => x.id !== id); persist(); emit(); return }
+  await sb.from('people').delete().eq('id', id); ppl = ppl.filter(x => x.id !== id); emit()
+}
+// Bulk import in batches (HighLevel has ~26k contacts). Upserts by HighLevel id.
+export async function importPeople(list, onStep = () => {}) {
+  if (MODE === 'demo' || !sb) {
+    const l = demoPeople(), max = 3000
+    for (const p of list.slice(0, max)) { const ex = p.extRef && l.find(x => x.extRef === p.extRef); if (ex) Object.assign(ex, p); else l.push({ ...p, id: uid('per') }) }
+    persist(); emit(); onStep(Math.min(list.length, max), list.length); return { saved: Math.min(list.length, max), capped: list.length > max }
+  }
+  let saved = 0
+  for (let i = 0; i < list.length; i += 500) {
+    const rows = list.slice(i, i + 500).map(personDb)
+    const { error } = await sb.from('people').upsert(rows, { onConflict: 'org_id,ext_ref' })
+    if (error) throw new Error(/relation|schema cache|column/i.test(error.message) ? t('ppl.e_sql') + ' (' + error.message + ')' : error.message)
+    saved += rows.length; onStep(saved, list.length)
+  }
+  await loadPeople(true)
+  return { saved, capped: false }
 }

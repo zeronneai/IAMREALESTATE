@@ -92,3 +92,63 @@ export function parseGhlOpportunities(text) {
   }
   return { items, skipped }
 }
+
+// ---------- Contacts (iAM Real Estate sub-account) ----------
+const e164 = s => { const d = String(s || '').replace(/\D/g, ''); if (d.length === 10) return '+1' + d; if (d.length === 11 && d[0] === '1') return '+' + d; return d.length > 6 ? '+' + d : '' }
+const KIND_TAG = [[/buyer|comprador/i, 'buyer'], [/seller|vendedor/i, 'seller'], [/renter|tenant|inquilino|rent/i, 'renter'], [/investor|wholesal/i, 'investor'], [/realtor|agent|broker/i, 'agent']]
+
+// HighLevel "Contacts > Export": Contact Id, First Name, Last Name, Name, Phone, Email, Business Name, Created, Last Activity, Tags, ...
+export function parseGhlContacts(text) {
+  const rows = parseCsvText(text)
+  if (rows.length < 2) return { people: [], error: 'empty' }
+  const head = rows[0].map(h => String(h).trim())
+  const ix = {
+    id: col(head, /^contact\s*id$/i, /^id$/i), first: col(head, /^first\s*name$/i), last: col(head, /^last\s*name$/i), name: col(head, /^(full\s*)?name$/i, /contact\s*name/i),
+    phone: col(head, /^phone$/i, /phone/i), email: col(head, /^email$/i, /e-?mail/i), business: col(head, /business|company/i),
+    created: col(head, /^created/i, /date\s*added/i), activity: col(head, /last\s*activity/i, /updated/i), tags: col(head, /^tags?$/i), source: col(head, /source/i), dnd: col(head, /^dnd$/i, /do\s*not\s*disturb/i),
+  }
+  if (ix.phone < 0 && ix.email < 0) return { people: [], error: 'columns', head }
+  const date = s => { const d = new Date(s); return isNaN(d) ? null : d.toISOString() }
+  const people = []
+  for (const r of rows.slice(1)) {
+    const g = k => (ix[k] >= 0 ? String(r[ix[k]] || '').trim() : '')
+    const phone = e164(g('phone')), email = g('email').toLowerCase()
+    if (!phone && !email) continue
+    const tags = g('tags').split(/[,;]/).map(x => x.trim()).filter(Boolean)
+    const kind = KIND_TAG.find(([re]) => tags.some(x => re.test(x)))?.[1] || 'other'
+    const first = g('first'), last = g('last')
+    people.push({ first, last, name: g('name') || [first, last].filter(Boolean).join(' '), phone, email, business: g('business'), kind, stage: '', value: null, tags, source: g('source') || 'HighLevel', notes: '', dnd: /^(true|yes|1)$/i.test(g('dnd')), extRef: 'ghl:' + (g('id') || phone || email), lastActivity: date(g('activity')) || date(g('created')), createdAt: date(g('created')) })
+  }
+  return { people }
+}
+
+// HighLevel "Opportunities > Export" from the iAM Real Estate sub-account: Buyers, Sellers, Renters pipelines give kind and stage.
+const PPL_PIPES = [[/buyer/i, 'buyer'], [/seller/i, 'seller'], [/rent/i, 'renter'], [/refinanc/i, 'other']]
+export function parseGhlPipelines(text) {
+  const rows = parseCsvText(text)
+  if (rows.length < 2) return { stages: [], error: 'empty' }
+  const head = rows[0].map(h => String(h).trim())
+  const ix = { name: col(head, /^opportunity\s*name$/i, /^name$/i), contact: col(head, /^contact\s*name$/i), cid: col(head, /^contact\s*id$/i), phone: col(head, /^phone$/i), email: col(head, /^email$/i), pipe: col(head, /^pipeline(\s*name)?$/i, /pipeline/i), stage: col(head, /^stage(\s*name)?$/i, /stage/i), value: col(head, /lead\s*value/i, /monetary/i, /^value$/i), status: col(head, /^status$/i) }
+  if (ix.pipe < 0 || ix.stage < 0) return { stages: [], error: 'columns', head }
+  const stages = []
+  for (const r of rows.slice(1)) {
+    const g = k => (ix[k] >= 0 ? String(r[ix[k]] || '').trim() : '')
+    const kind = PPL_PIPES.find(([re]) => re.test(g('pipe')))?.[1]
+    if (!kind) continue
+    stages.push({ cid: g('cid'), phone: e164(g('phone')), email: g('email').toLowerCase(), name: g('contact') || g('name'), kind, stage: g('stage'), value: +String(g('value')).replace(/[^0-9.-]/g, '') || null })
+  }
+  return { stages }
+}
+
+// Put pipeline kind and stage onto the contacts (by HighLevel contact id, then phone, then email).
+export function applyStages(people, stages) {
+  const byId = new Map(people.map(p => [p.extRef, p])), byPh = new Map(people.filter(p => p.phone).map(p => [p.phone, p])), byEm = new Map(people.filter(p => p.email).map(p => [p.email, p]))
+  let hit = 0
+  for (const s of stages) {
+    let p = (s.cid && byId.get('ghl:' + s.cid)) || (s.phone && byPh.get(s.phone)) || (s.email && byEm.get(s.email))
+    if (!p && (s.phone || s.email)) { p = { first: '', last: '', name: s.name, phone: s.phone, email: s.email, business: '', kind: s.kind, stage: '', value: null, tags: [], source: 'HighLevel', notes: '', dnd: false, extRef: 'ghl:' + (s.cid || s.phone || s.email), lastActivity: null, createdAt: null }; people.push(p); if (p.phone) byPh.set(p.phone, p) }
+    if (!p) continue
+    p.kind = s.kind; p.stage = s.stage; if (s.value) p.value = s.value; hit++
+  }
+  return hit
+}
