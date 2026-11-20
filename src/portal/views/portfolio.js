@@ -211,7 +211,7 @@ function ghlModal(done) {
 // ---------- Import from RentRedi (all of I AM's rents are collected there) ----------
 function rentRediModal(done) {
   modal(`<h3>${esc(t('rr.title'))}</h3><p class="muted" style="margin:0">${esc(t('rr.lead'))}</p>
-    <label class="drop" style="cursor:pointer">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>CSV</p><input type="file" accept=".csv,text/csv" hidden data-file></label>
+    <label class="drop" style="cursor:pointer">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>CSV</p><input type="file" accept=".csv,.txt,text/csv,text/plain" hidden data-file></label>
     <div data-prev></div>`, (box, close) => {
     box.querySelector('[data-file]').onchange = async e => {
       const f = e.target.files[0]; if (!f) return
