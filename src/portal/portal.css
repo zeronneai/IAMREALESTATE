@@ -938,3 +938,4 @@ details summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-b
 .cal-lh:first-child { margin-top: 0; }
 .cal-li { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .cal-li .cal-ev { height: auto; flex: 1; padding: 8px 10px; font-size: 13px; }
+.mk-zoomtip { bottom: auto; top: 58px; background: rgba(18,17,16,.86); font-weight: 500; }

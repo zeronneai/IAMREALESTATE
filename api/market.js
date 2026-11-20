@@ -30,6 +30,15 @@ export default async function handler(req, res) {
     const hit = await db.rest(`market_cache?key=eq.${encodeURIComponent(ck)}&select=data,total,fetched_at`).then(r => (r.ok ? r.json() : [])).catch(() => [])
     if (hit?.[0] && Date.now() - new Date(hit[0].fetched_at) < op.ttl * 1000) return res.status(200).json({ data: hit[0].data, total: hit[0].total, cached: true })
   }
+  // Monthly safety cap (default 50 = RentCast's free plan) so the account never pays overage by accident.
+  const cap = +process.env.MARKET_MONTHLY_LIMIT || 50
+  const uk = 'usage:' + new Date().toISOString().slice(0, 7)
+  let used = 0
+  if (db.ok) {
+    const u = await db.rest(`market_cache?key=eq.${encodeURIComponent(uk)}&select=total`).then(x => (x.ok ? x.json() : [])).catch(() => [])
+    used = +u?.[0]?.total || 0
+    if (used >= cap) return res.status(429).json({ code: 'month_cap', used, cap })
+  }
   const r = await fetch(`${BASE}${op.path}?${q}`, { headers: { 'X-Api-Key': key, Accept: 'application/json' } }).catch(() => null)
   if (!r) return res.status(502).json({ code: 'unreachable' })
   if (r.status === 404) return res.status(200).json({ data: req.query.op === 'value' ? null : [], total: 0 })
@@ -37,7 +46,9 @@ export default async function handler(req, res) {
   if (r.status === 429) return res.status(429).json({ code: 'limit' })
   if (!r.ok) return res.status(502).json({ code: 'failed', status: r.status })
   const data = await r.json()
+  used++
+  if (db.ok) await db.rest('market_cache?on_conflict=key', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify({ key: uk, data: {}, total: used, fetched_at: new Date().toISOString() }) }).catch(() => {})
   const total = +r.headers.get('x-total-count') || (Array.isArray(data) ? data.length : 1)
   if (db.ok) await db.rest('market_cache?on_conflict=key', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify({ key: ck, data, total, fetched_at: new Date().toISOString() }) }).catch(() => {})
-  res.status(200).json({ data, total })
+  res.status(200).json({ data, total, used, cap })
 }

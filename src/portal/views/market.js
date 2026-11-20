@@ -67,7 +67,7 @@ async function search(el, area = false) {
   R.loading = true; R.error = ''; paintList(el)
   try {
     if (S.MODE === 'demo') { await new Promise(r => setTimeout(r, 400)); R.list = demoListings(area && map ? [map.getCenter().lat, map.getCenter().lng] : null, F.mode).filter(x => (!F.beds || x.bedrooms >= +F.beds) && (!F.priceMin || x.price >= +F.priceMin) && (!F.priceMax || x.price <= +F.priceMax)); R.total = R.list.length; R.cached = false }
-    else { const j = await api(F.mode === 'rent' ? 'rent' : 'sale', { ...where, ...filterParams() }); R.list = (j.data || []).filter(x => x.latitude && x.longitude); R.total = j.total || R.list.length; R.cached = !!j.cached }
+    else { const j = await api(F.mode === 'rent' ? 'rent' : 'sale', { ...where, ...filterParams() }); R.list = (j.data || []).filter(x => x.latitude && x.longitude); R.total = j.total || R.list.length; R.cached = !!j.cached; if (j.cap) R.usage = { used: j.used, cap: j.cap } }
   } catch (e) { R.error = e.message; R.list = [] }
   R.loading = false
   paintList(el); drawPins(true)
@@ -95,6 +95,7 @@ export function marketView(el) {
           <button class="btn sm ${lotsOn ? 'gold' : ''}" data-lots title="${esc(t('mk.lots_hint'))}">${esc(t('mk.lots'))}</button>
         </div>
         ${ownerMode ? `<div class="mk-tip">${esc(t('mk.owner_tip'))}</div>` : ''}
+        <div class="mk-tip mk-zoomtip" data-zoomtip hidden>${esc(t('mk.zoom_lots'))}</div>
       </div>
       <aside class="mk-list" data-list></aside>
     </div></div>`
@@ -115,7 +116,7 @@ function paintList(el) {
   const box = el.querySelector('[data-list]'); if (!box) return
   box.innerHTML = R.loading ? `<p class="muted" style="padding:16px"><span class="spin"></span> ${esc(t('mk.searching'))}</p>`
     : R.error ? `<div class="alert bad" style="margin:12px">${esc(R.error)}</div>`
-    : `<div class="mk-count"><b>${(+R.total).toLocaleString()} ${esc(F.mode === 'rent' ? t('mk.for_rent') : t('mk.for_sale'))}</b>${R.total > R.list.length ? `<span class="muted">${esc(t('cs.showing'))} ${R.list.length}</span>` : ''}${S.MODE === 'demo' ? `<span class="pill">${esc(t('mk.sample'))}</span>` : ''}</div>
+    : `<div class="mk-count"><b>${(+R.total).toLocaleString()} ${esc(F.mode === 'rent' ? t('mk.for_rent') : t('mk.for_sale'))}</b>${R.total > R.list.length ? `<span class="muted">${esc(t('cs.showing'))} ${R.list.length}</span>` : ''}${S.MODE === 'demo' ? `<span class="pill">${esc(t('mk.sample'))}</span>` : ''}${R.usage ? `<span class="muted" title="${esc(t('mk.usage_hint'))}">${R.usage.used} / ${R.usage.cap} ${esc(t('mk.usage'))}</span>` : ''}</div>
       ${R.list.map(x => `<button class="mk-card" data-id="${esc(x.id)}">
         <img loading="lazy" alt="" src="${x.demo ? `/img/${['ext1', 'ext2', 'ext3', 'ext4', 'ext5', 'ext6', 'ext7', 'ext8', 'ext9'][Math.abs(x.id.length + +x.id.replace(/\D/g, '')) % 9]}.webp` : esc(photoUrl({ address: x.addressLine1, city: x.city, state: x.state, zip: x.zipCode }, 'street', 480, 300, true))}" onerror="this.style.visibility='hidden'">
         <div class="mk-info"><b>${money(x.price)}${F.mode === 'rent' ? `<small>/${esc(t('mk.mo'))}</small>` : ''}</b>
@@ -149,10 +150,12 @@ async function initMap(el) {
   hl = L.geoJSON(null, { style: { color: '#c2432a', weight: 3, fillOpacity: .12 } }).addTo(map)
   pins = L.layerGroup().addTo(map); leadsLayer = L.layerGroup().addTo(map)
   drawLeads()
-  map.on('moveend', () => { R.center = [map.getCenter().lat, map.getCenter().lng] })
+  map.on('moveend', () => { R.center = [map.getCenter().lat, map.getCenter().lng]; zoomTip() })
   map.on('click', e => { if (ownerMode) ownerAt(e.latlng.lat, e.latlng.lng) })
 }
-function setLots() { if (!map || !lots) return; if (lotsOn) lots.addTo(map); else map.removeLayer(lots) }
+function setLots() { if (!map || !lots) return; if (lotsOn) lots.addTo(map); else map.removeLayer(lots); zoomTip() }
+// Lot lines only draw from street level (zoom 15): say so instead of looking broken.
+function zoomTip() { const z = document.querySelector('[data-zoomtip]'); if (z && map) z.hidden = !(lotsOn && map.getZoom() < 15 && inTexas(map.getCenter().lat, map.getCenter().lng)) }
 function setBase() { if (!map) return; if (satOn) { map.removeLayer(base); sat.addTo(map) } else { map.removeLayer(sat); base.addTo(map) } }
 function drawLeads() {
   if (!leadsLayer) return
