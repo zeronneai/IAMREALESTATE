@@ -46,6 +46,7 @@ export function parseGhlOpportunities(text) {
     contact: col(head, /^contact\s*name$/i, /contact/i),
     phone: col(head, /^phone$/i),
     status: col(head, /^status$/i),
+    tags: col(head, /^tags?$/i),
   }
   if (ix.name < 0 || ix.pipe < 0 || ix.stage < 0) return { items: [], skipped: [], error: 'columns', head }
   const items = [], skipped = []
@@ -69,6 +70,10 @@ export function parseGhlOpportunities(text) {
     // A home is the part before "|": a street address, or a named place ("Flora Vista", "Paddlefoot").
     const home = left && (/^\d/.test(left) || rest.length || kind.kind !== 'rent') ? left.replace(/,\s*$/, '') : ''
     if (!home && left) party = party || left
+    // Their tags carry the due day ("due on the 1st", "due on the 27th") and who collects ("prime escrow", "mills escrow").
+    const tags = g('tags').split(/[,;]/).map(x => x.trim()).filter(Boolean)
+    const dueTag = tags.map(x => x.match(/due\s*on\s*the\s*(\d{1,2})/i)).find(Boolean)
+    const escrow = tags.find(x => /escrow|servic|bank|loan|mortgage/i.test(x)) || ''
     const closed = /^closed$|cancel/i.test(stage) || /lost|abandon/i.test(g('status'))
     const situation = SITUATION.find(([re]) => re.test(stage))?.[1] || 'normal'
     items.push({
@@ -77,8 +82,10 @@ export function parseGhlOpportunities(text) {
       ob: {
         kind: kind.kind, party, amount, freq: 'monthly',
         // HighLevel has no due day: "Late" shows as late now, "Due" as due later this month. They set the real day after.
-        dueDay: /late|evict|foreclos/i.test(stage) ? 1 : 28, grace: /late|evict|foreclos/i.test(stage) ? 0 : 3,
-        autopay: false, account: '', payUrl: '', active: !closed, lien, unit, situation,
+        dueDay: dueTag ? Math.min(31, +dueTag[1]) : /late|evict|foreclos/i.test(stage) ? 1 : 28,
+        grace: dueTag ? (kind.kind === 'mortgage' ? 15 : 5) : /late|evict|foreclos/i.test(stage) ? 0 : 3,
+        account: escrow ? escrow.replace(/\b\w/g, c => c.toUpperCase()) : '', dueSet: !!dueTag,
+        autopay: false, payUrl: '', active: !closed, lien, unit, situation,
         notes: `HighLevel: ${pipe} · ${stage}`, extRef: 'ghl:' + (g('id') || `${pipe}|${name}`),
       },
     })
