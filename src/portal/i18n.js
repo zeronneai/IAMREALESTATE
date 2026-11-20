@@ -661,7 +661,7 @@ const D = {
   'pf.method': ['Method', 'Método'], 'pf.reference': ['Confirmation #', 'Núm. de confirmación'], 'pf.reference_ph': ['Check or confirmation number', 'Cheque o confirmación'],
   'pf.late_fee': ['Late fee', 'Recargo'], 'pf.undo': ['Undo payment', 'Deshacer pago'], 'pf.waive': ['Mark as waived', 'Marcar exento'],
   'pf.saved_out': ['Payment recorded', 'Pago registrado'], 'pf.saved_in': ['Rent recorded', 'Renta registrada'],
-  'pf.e_sql': ['Run portfolio.sql in Supabase first.', 'Primero corre portfolio.sql en Supabase.'],
+  'pf.e_sql': ['Run portfolio.sql and then portfolio_ghl.sql in Supabase first.', 'Primero corre portfolio.sql y luego portfolio_ghl.sql en Supabase.'],
   'fin.to_pay': ['To pay', 'Por pagar'], 'fin.to_collect': ['To collect', 'Por cobrar'], 'fin.add_bill': ['Add bill', 'Agregar bill'],
   'fin.g_late': ['Late', 'Atrasados'], 'fin.g_week': ['Due in the next 7 days', 'Vencen en 7 días'], 'fin.g_soon': ['Next 30 days', 'Próximos 30 días'], 'fin.g_auto': ['On autopay', 'Con autopago'], 'fin.g_done': ['Paid in the last 30 days', 'Pagados últimos 30 días'], 'fin.g_done_in': ['Received in the last 30 days', 'Recibidos últimos 30 días'],
   'fin.items': ['items', 'pagos'], 'fin.empty': ['Nothing here yet. Set up payments for your homes in Portfolio, or add a bill.', 'Nada todavía. Configura los pagos de tus casas en Portafolio o agrega un bill.'],
