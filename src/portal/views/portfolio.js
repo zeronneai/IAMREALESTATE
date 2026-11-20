@@ -217,31 +217,36 @@ function rentRediModal(done) {
       const f = e.target.files[0]; if (!f) return
       const r = parseRentRedi(await f.text()), prev = box.querySelector('[data-prev]')
       if (r.error) { prev.innerHTML = `<div class="alert bad">${esc(t('rr.bad'))}</div>`; return }
-      // Rent items for every month the file covers, so each payment lands on its own month.
-      const months = [...new Set(r.pays.map(x => x.date.slice(0, 7) + '-01'))]
-      const cache = Object.fromEntries(months.map(m => [m, S.periodItems(m).filter(i => i.ob.kind === 'rent')]))
-      const rentOpts = S.obligations().filter(o => o.kind === 'rent' && o.active)
-      const rows = r.pays.map(x => { const it = matchRent(x, cache[x.date.slice(0, 7) + '-01'] || []); return { ...x, obId: it?.ob.id || '', already: !!it?.pay } })
-      const label = o => { const v = S.inventory().find(h => h.id === o.invId); return `${v?.address || ''}${o.unit ? ' ' + o.unit : ''}${o.party ? ' · ' + o.party : ''}` }
+      // Match against every money-in item (rent, wrap, loan), whatever month it started in.
+      const rentOpts = S.obligations().filter(o => S.dirOf(o.kind) === 'in')
+      const cands = rentOpts.map(o => ({ ob: o, inv: S.inventory().find(h => h.id === o.invId) || null }))
+      const owing = r.pays.filter(x => !(x.amount > 0))
+      const rows = r.pays.filter(x => x.amount > 0).map(x => { const it = matchRent(x, cands); return { ...x, obId: it?.ob.id || '' } })
+      const label = o => { const v = S.inventory().find(h => h.id === o.invId); return `${v?.address || ''}${o.unit ? ' ' + o.unit : ''} · ${t('pf.k_' + o.kind)}${o.party ? ' · ' + o.party : ''}` }
       const opts = sel => `<option value="">${esc(t('rr.skip'))}</option>` + rentOpts.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? 'selected' : ''}>${esc(label(o))}</option>`).join('')
+      const mon = p => new Date(+p.slice(0, 4), +p.slice(5, 7) - 1, 1).toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'short', year: 'numeric' })
       const ok = rows.filter(x => x.obId).length
-      prev.innerHTML = `<div class="alert">${r.pays.length} ${esc(t('rr.pays'))} · <b>${ok}</b> ${esc(t('rr.matched'))} · ${r.pays.length - ok} ${esc(t('rr.unmatched'))}${r.skipped.length ? ` · ${r.skipped.length} ${esc(t('rr.ignored'))}` : ''}</div>
+      prev.innerHTML = `<div class="alert">${rows.length} ${esc(t('rr.pays'))} · <b>${ok}</b> ${esc(t('rr.matched'))} · ${rows.length - ok} ${esc(t('rr.unmatched'))}${r.skipped.length ? ` · ${r.skipped.length} ${esc(t('rr.ignored'))}` : ''}${owing.length ? ` · ${owing.length} ${esc(t('rr.owing'))}` : ''}</div>
         <p class="muted" style="margin:0">${esc(t('rr.note'))}</p>
-        <div class="tbl-wrap" style="max-height:320px;overflow:auto"><table class="seq-tbl"><tbody>${rows.map((x, i) => `<tr><td><small>${esc(date(x.date))}</small></td><td><b>${esc(x.tenant)}</b><small class="dim" style="display:block">${esc(x.property)}${x.unit ? ' #' + esc(x.unit) : ''}</small></td><td class="num">${money(x.amount)}</td><td><select data-i="${i}" style="max-width:280px">${opts(x.obId)}</select>${x.already ? ` <small class="dim">${esc(t('rr.already'))}</small>` : ''}</td></tr>`).join('')}</tbody></table></div>
+        <div class="tbl-wrap" style="max-height:320px;overflow:auto"><table class="seq-tbl"><tbody>${rows.map((x, i) => `<tr><td><b>${esc(mon(x.period))}</b><small class="dim" style="display:block">${esc(t('pf.paid_on'))} ${esc(date(x.date))}</small></td><td><b>${esc(x.tenant)}</b><small class="dim" style="display:block">${esc(x.property)}${x.unit ? ' #' + esc(x.unit) : ''}</small></td><td class="num">${money(x.amount)}${x.owed > 0 ? `<small class="dim" style="display:block">${esc(t('rr.still'))} ${money(x.owed)}</small>` : ''}</td><td><select data-i="${i}" style="max-width:300px">${opts(x.obId)}</select></td></tr>`).join('')}</tbody></table></div>
         <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost" data-x>${esc(t('cancel'))}</button><button class="btn gold" data-go>${esc(t('rr.go'))}</button></div>`
       prev.querySelectorAll('[data-i]').forEach(s2 => s2.onchange = () => { rows[+s2.dataset.i].obId = s2.value })
       prev.querySelector('[data-x]').onclick = close
       prev.querySelector('[data-go]').onclick = async ev => {
-        const b = ev.currentTarget; b.disabled = true; let n = 0, skip = 0
+        const b = ev.currentTarget; b.disabled = true; let n = 0, skip = rows.filter(x => !x.obId).length
         try {
-          for (const x of rows) {
-            if (!x.obId) { skip++; continue }
-            const per = x.date.slice(0, 7) + '-01', it = S.periodItems(per).find(i => i.ob.id === x.obId)
-            if (!it) { skip++; continue }
-            const paid = (it.pay?.paid || 0) + (it.pay && it.pay.reference === x.ref ? 0 : x.amount)
-            if (it.pay && x.ref && it.pay.reference === x.ref) { skip++; continue }
-            await S.recordPayment(it, { paid, paidOn: x.date, method: 'RentRedi', reference: x.ref || '', notes: it.pay ? (it.pay.notes ? it.pay.notes + ' + ' : '') + 'RentRedi' : 'RentRedi' })
-            n++; b.textContent = `${n} / ${rows.length}`
+          // One payment per item and month: charges in the same month (rent + prorated) add up.
+          const groups = new Map()
+          for (const x of rows.filter(x => x.obId)) { const k = x.obId + '|' + x.period, g = groups.get(k) || { obId: x.obId, period: x.period, paid: 0, owed: 0, date: x.date, refs: [], method: x.method }; g.paid += x.amount; g.owed += x.owed || 0; if (x.date > g.date) g.date = x.date; g.refs.push(x.ref); groups.set(k, g) }
+          for (const g of groups.values()) {
+            let it = S.periodItems(g.period).find(i => i.ob.id === g.obId)
+            if (!it) { // item starts later than this payment: move its start back so the month exists
+              const ob = S.obligations().find(o => o.id === g.obId); if (!ob) continue
+              await S.saveObligation({ ...ob, dueDate: `${g.period.slice(0, 8)}${String(Math.min(ob.dueDay || 1, 28)).padStart(2, '0')}` })
+              it = S.periodItems(g.period).find(i => i.ob.id === g.obId); if (!it) continue
+            }
+            await S.recordPayment(it, { paid: Math.round(g.paid * 100) / 100, paidOn: g.date, method: g.method.slice(0, 40), reference: g.refs.join(' ').slice(0, 200), status: g.owed > 0.5 ? 'partial' : 'paid', notes: 'RentRedi' })
+            n++; b.textContent = `${n} / ${groups.size}`
           }
           close(); toast(`${t('rr.done')}: ${n}${skip ? ` · ${skip} ${t('rr.unmatched')}` : ''}`); done()
         } catch (err) { b.disabled = false; toast(err.message) }
