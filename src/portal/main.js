@@ -10,6 +10,7 @@ import { lists } from './views/lists.js'
 import { inbox } from './views/inbox.js'
 import { contactsView } from './views/contacts.js'
 import { calendarView } from './views/calendar.js'
+import { jarvisView } from './views/jarvis.js'
 import { countyView } from './views/county.js'
 import { marketView } from './views/market.js'
 import { driveView } from './views/drive.js'
@@ -30,6 +31,7 @@ const ROUTES = {
   drive: { icon: 'route', render: el => driveView(el), still: true },
   county: { icon: 'search', render: el => countyView(el), still: true },
   contacts: { icon: 'users', render: el => contactsView(el), still: true, count: () => S.people().length || '' },
+  jarvis: { icon: 'spark', render: el => jarvisView(el), still: true },
   calendar: { icon: 'calendar', render: el => calendarView(el), still: true, count: () => S.appointments().filter(a => a.status !== 'cancelled' && new Date(a.start).toDateString() === new Date().toDateString()).length || '' },
   inbox: { icon: 'inbox', render: el => inbox(el), still: true, count: () => S.unreadCount() || '' },
   sequences: { icon: 'route', render: el => sequencesView(el), count: () => S.enrollments().filter(e => e.status === 'active').length || '' },
