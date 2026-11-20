@@ -2,15 +2,17 @@
 import { t, getLang } from '../i18n.js'
 import * as S from '../store.js'
 import { esc, money, date, toast, modal, icon } from '../ui.js'
+import { parseGhlOpportunities } from '../parse/ghl.js'
+const SITS = ['normal', 'payment_plan', 'eviction', 'foreclosure', 'vacant', 'disconnected']
 
-const KINDS = ['rent', 'mortgage', 'tax', 'insurance', 'hoa', 'utility', 'repair', 'other']
+const KINDS = ['rent', 'mortgage', 'wrap', 'loan', 'tax', 'insurance', 'hoa', 'utility', 'repair', 'other']
 const METHODS = ['ACH', 'Zelle', 'Check', 'Card', 'Cash', 'RentRedi', 'Autopay', 'Wire']
 let month = S.monthStart()
 const shiftMonth = (p, k) => { const d = new Date(+p.slice(0, 4), +p.slice(5, 7) - 1 + k, 1); return S.monthStart(d) }
 const monthName = p => new Date(+p.slice(0, 4), +p.slice(5, 7) - 1, 1).toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'long', year: 'numeric' })
 const CLS = { paid: 'ok', partial: 'gold', waived: '', late: 'bad', due: 'gold', upcoming: '', autopay: 'blue' }
 export const pill = it => `<span class="pill ${CLS[it.status] || ''}">${esc(t((it.ob.dir === 'in' && it.status === 'paid') ? 'pf.st_received' : 'pf.st_' + it.status))}</span>`
-const what = it => `${t('pf.k_' + it.ob.kind)}${it.ob.party ? ' · ' + it.ob.party : ''}`
+const what = it => `${t('pf.k_' + it.ob.kind)}${it.ob.lien > 1 ? ' (' + t('pf.lien2') + ')' : ''}${it.ob.unit ? ' ' + it.ob.unit : ''}${it.ob.party ? ' · ' + it.ob.party : ''}${it.ob.situation && it.ob.situation !== 'normal' ? ' · ' + t('pf.s_' + it.ob.situation) : ''}`
 const sum = (l, f) => l.reduce((a, x) => a + (f(x) || 0), 0)
 
 // ---------- Portfolio ----------
@@ -25,7 +27,7 @@ export function portfolioView(el) {
   const cell = list => list.length ? list.map(i => `<button class="pf-chip" data-it="${esc(i.ob.id)}" title="${esc(what(i))} · ${esc(date(i.due))}">${pill(i)}<small>${money(i.amount)}</small></button>`).join('') : '<span class="dim">n/a</span>'
 
   el.innerHTML = `
-  <div class="pf-month fade-in"><button class="btn sm ghost" data-m="-1">‹</button><b>${esc(monthName(month))}</b><button class="btn sm ghost" data-m="1">›</button>${month !== S.monthStart() ? `<button class="btn sm ghost" data-m="0">${esc(t('pf.this_month'))}</button>` : ''}<span class="sp"></span><a class="btn sm" href="#/finance">${esc(t('nav.finance'))} →</a></div>
+  <div class="pf-month fade-in"><button class="btn sm ghost" data-m="-1">‹</button><b>${esc(monthName(month))}</b><button class="btn sm ghost" data-m="1">›</button>${month !== S.monthStart() ? `<button class="btn sm ghost" data-m="0">${esc(t('pf.this_month'))}</button>` : ''}<span class="sp"></span><button class="btn sm ghost" data-ghl>${icon('upload')}${esc(t('pf.ghl'))}</button><a class="btn sm" href="#/finance">${esc(t('nav.finance'))} →</a></div>
   <div class="pf-kpis fade-in">
     <div class="pf-kpi"><small>${esc(t('pf.rent_collected'))}</small><b>${money(got)}</b><span class="muted">${esc(t('pf.of'))} ${money(exp)} · ${rentIt.filter(i => i.status === 'late').length} ${esc(t('pf.late'))}</span><div class="pf-bar"><i style="width:${exp ? Math.min(100, got / exp * 100) : 0}%"></i></div></div>
     <div class="pf-kpi"><small>${esc(t('pf.mortgages'))}</small><b>${mort.filter(i => ['paid', 'autopay'].includes(i.status)).length} / ${mort.length}</b><span class="muted">${esc(t('pf.paid_label'))} · ${mort.filter(i => i.status === 'late').length} ${esc(t('pf.late'))}</span><div class="pf-bar"><i style="width:${mort.length ? mort.filter(i => ['paid', 'autopay'].includes(i.status)).length / mort.length * 100 : 0}%"></i></div></div>
@@ -34,9 +36,9 @@ export function portfolioView(el) {
   </div>
   ${late.length ? `<div class="alert bad fade-in pf-late"><b>${esc(t('pf.late_items'))} (${late.length}):</b> ${late.slice(0, 4).map(i => `<button class="linkish" data-it="${esc(i.ob.id)}">${esc(i.inv?.address || i.ob.party)} · ${esc(t('pf.k_' + i.ob.kind))}</button>`).join(' · ')}</div>` : ''}
   <div class="card fade-in" style="padding:0">
-    <div class="tbl-wrap"><table class="seq-tbl pf-tbl"><thead><tr><th>${esc(t('c.address'))}</th><th>${esc(t('pf.tenant'))}</th><th>${esc(t('pf.k_rent'))}</th><th>${esc(t('pf.k_mortgage'))}</th><th>${esc(t('pf.other'))}</th><th class="num">${esc(t('pf.month_net'))}</th><th></th></tr></thead><tbody>
+    <div class="tbl-wrap"><table class="seq-tbl pf-tbl"><thead><tr><th>${esc(t('c.address'))}</th><th>${esc(t('pf.tenant'))}</th><th>${esc(t('pf.income'))}</th><th>${esc(t('pf.k_mortgage'))}</th><th>${esc(t('pf.other'))}</th><th class="num">${esc(t('pf.month_net'))}</th><th></th></tr></thead><tbody>
     ${inv.map(v => {
-      const mine = items.filter(i => i.ob.invId === v.id), r = mine.filter(i => i.ob.kind === 'rent'), m = mine.filter(i => i.ob.kind === 'mortgage'), o = mine.filter(i => !['rent', 'mortgage'].includes(i.ob.kind))
+      const mine = items.filter(i => i.ob.invId === v.id), r = mine.filter(i => i.ob.dir === 'in'), m = mine.filter(i => i.ob.kind === 'mortgage'), o = mine.filter(i => i.ob.dir === 'out' && i.ob.kind !== 'mortgage')
       const has = S.obligations().some(x => x.invId === v.id)
       const net = sum(r, i => i.pay?.paid) - sum(mine.filter(i => i.ob.dir === 'out'), i => i.pay?.paid)
       return `<tr data-v="${esc(v.id)}"><td><b style="display:block">${esc(v.address)}</b><small class="dim">${esc(t('is.' + v.status))}</small></td>
@@ -46,6 +48,7 @@ export function portfolioView(el) {
     </tbody></table></div>
   </div>`
 
+  el.querySelector('[data-ghl]').onclick = () => ghlModal(() => portfolioView(el))
   el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { month = b.dataset.m === '0' ? S.monthStart() : shiftMonth(month, +b.dataset.m); portfolioView(el) })
   el.querySelectorAll('[data-it]').forEach(b => b.onclick = e => { e.stopPropagation(); const it = items.find(i => i.ob.id === b.dataset.it); if (it) payModal(it, () => portfolioView(el)) })
   el.querySelectorAll('[data-ledger]').forEach(b => b.onclick = e => { e.stopPropagation(); ledger(S.inventory().find(v => v.id === b.dataset.ledger), () => portfolioView(el)) })
@@ -85,7 +88,7 @@ function setup(v, done) {
 
 // Create or edit a recurring item or a one time bill.
 export function oblModal(ob, invId, done, preset = null) {
-  const o = ob ? { ...ob } : { invId: invId || null, kind: invId ? 'mortgage' : 'other', party: '', amount: '', freq: invId ? 'monthly' : 'once', dueDay: 1, dueDate: '', grace: 5, autopay: false, account: '', payUrl: '', notes: '', ...(preset || {}) }
+  const o = ob ? { ...ob } : { invId: invId || null, kind: invId ? 'mortgage' : 'other', party: '', amount: '', freq: invId ? 'monthly' : 'once', dueDay: 1, dueDate: '', grace: 5, autopay: false, account: '', payUrl: '', notes: '', lien: 1, unit: '', situation: 'normal', ...(preset || {}) }
   const homes = S.inventory().filter(v => v.status !== 'sold')
   modal(`<h3>${esc(ob ? t('pf.edit_item') : t('pf.add_item'))}</h3>
     <form class="form-grid" data-ob>
@@ -99,6 +102,9 @@ export function oblModal(ob, invId, done, preset = null) {
       <div class="f"><label>${esc(t('pf.grace'))}</label><input name="grace" type="number" min="0" max="60" value="${esc(o.grace ?? 5)}"></div>
       <div class="f"><label>${esc(t('pf.account'))}</label><input name="account" value="${esc(o.account)}" placeholder="••1234"></div>
       <div class="f"><label>${esc(t('pf.pay_url'))}</label><input name="payUrl" value="${esc(o.payUrl)}" placeholder="https://"></div>
+      <div class="f"><label>${esc(t('pf.unit'))}</label><input name="unit" value="${esc(o.unit || '')}" placeholder="#3"></div>
+      <div class="f"><label>${esc(t('pf.lien'))}</label><select name="lien"><option value="1" ${+o.lien !== 2 ? 'selected' : ''}>${esc(t('pf.lien1'))}</option><option value="2" ${+o.lien === 2 ? 'selected' : ''}>${esc(t('pf.lien2'))}</option></select></div>
+      <div class="f full"><label>${esc(t('pf.situation'))}</label><select name="situation">${SITS.map(x => `<option value="${x}" ${(o.situation || 'normal') === x ? 'selected' : ''}>${esc(t('pf.s_' + x))}</option>`).join('')}</select></div>
       <label class="chk full"><input type="checkbox" name="autopay" ${o.autopay ? 'checked' : ''}> ${esc(t('pf.autopay'))}</label>
       <div class="f full"><label>${esc(t('d.notes'))}</label><input name="notes" value="${esc(o.notes)}"></div>
       <div class="full" style="display:flex;gap:8px;justify-content:space-between">${ob ? `<button type="button" class="btn ghost danger" data-del>${esc(t('org.delete'))}</button>` : '<span></span>'}<span style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('org.save'))}</button></span></div>
@@ -106,13 +112,13 @@ export function oblModal(ob, invId, done, preset = null) {
     const f = box.querySelector('[data-ob]')
     const sync = () => { const fr = f.freq.value; box.querySelector('[data-dd]').hidden = fr !== 'monthly'; box.querySelector('[data-dt]').hidden = fr === 'monthly' }
     f.freq.onchange = sync; sync()
-    f.kind.onchange = () => { if (f.kind.value === 'rent' && f.freq.value === 'once') f.freq.value = 'monthly'; sync() }
+    f.kind.onchange = () => { if (S.IN_KINDS.includes(f.kind.value) && f.freq.value === 'once') f.freq.value = 'monthly'; sync() }
     box.querySelector('[data-del]')?.addEventListener('click', async () => { await S.deleteObligation(ob.id); close(); toast(t('org.deleted')); done() })
     f.onsubmit = async e => {
       e.preventDefault()
       const v = Object.fromEntries(new FormData(f))
       if (v.freq !== 'monthly' && !v.dueDate) return toast(t('pf.need_date'))
-      try { await S.saveObligation({ ...o, ...v, invId: v.invId || null, dir: v.kind === 'rent' ? 'in' : 'out', autopay: !!v.autopay }); close(); toast(t('org.saved')); done() } catch (err) { toast(err.message) }
+      try { await S.saveObligation({ ...o, ...v, invId: v.invId || null, dir: S.dirOf(v.kind), autopay: !!v.autopay }); close(); toast(t('org.saved')); done() } catch (err) { toast(err.message) }
     }
   })
 }
@@ -173,4 +179,29 @@ export function financeView(el) {
   el.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { finTab = b.dataset.tab; financeView(el) })
   el.querySelector('[data-bill]').onclick = () => oblModal(null, finTab === 'in' ? S.inventory()[0]?.id || null : null, () => financeView(el), finTab === 'in' ? { kind: 'rent', freq: 'monthly' } : null)
   el.querySelectorAll('[data-k]').forEach(r => r.querySelector('[data-k2]').onclick = () => { const [oid, per] = r.dataset.k.split('|'); const it = S.periodItems(per).find(i => i.ob.id === oid); if (it) payModal(it, () => financeView(el)) })
+}
+
+// ---------- Import from HighLevel (Property Management > Opportunities > export CSV) ----------
+function ghlModal(done) {
+  modal(`<h3>${esc(t('pf.ghl_title'))}</h3><p class="muted" style="margin:0">${esc(t('pf.ghl_lead'))}</p>
+    <label class="drop" style="cursor:pointer">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>CSV</p><input type="file" accept=".csv,text/csv" hidden data-file></label>
+    <div data-prev></div>`, (box, close) => {
+    box.querySelector('[data-file]').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return
+      const r = parseGhlOpportunities(await f.text())
+      const prev = box.querySelector('[data-prev]')
+      if (r.error) { prev.innerHTML = `<div class="alert bad">${esc(t('pf.ghl_bad'))}</div>`; return }
+      const by = {}; for (const i of r.items) by[i.ob.kind] = (by[i.ob.kind] || 0) + 1
+      const homes = new Set(r.items.map(i => i.home).filter(Boolean))
+      prev.innerHTML = `<div class="alert">${esc(t('pf.ghl_found'))}: ${Object.entries(by).map(([k, n]) => `<b>${n}</b> ${esc(t('pf.k_' + k))}`).join(' · ')} · <b>${homes.size}</b> ${esc(t('pf.ghl_homes'))}${r.skipped.length ? ` · ${r.skipped.length} ${esc(t('pf.ghl_skip'))}` : ''}</div>
+        <p class="muted" style="margin:0">${esc(t('pf.ghl_note'))}</p>
+        <div class="tbl-wrap" style="max-height:260px;overflow:auto"><table class="seq-tbl"><tbody>${r.items.slice(0, 60).map(i => `<tr><td>${esc(i.home || 'n/a')}</td><td>${esc(t('pf.k_' + i.ob.kind))}${i.ob.unit ? ' ' + esc(i.ob.unit) : ''}${i.ob.lien > 1 ? ' · ' + esc(t('pf.lien2')) : ''}</td><td>${esc(i.ob.party)}</td><td class="num">${money(i.ob.amount)}</td><td><small class="dim">${esc(i.source.stage)}</small></td></tr>`).join('')}</tbody></table></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold" data-go>${esc(t('pf.ghl_go'))} (${r.items.length})</button></div>`
+      prev.querySelector('[data-close]').onclick = close
+      prev.querySelector('[data-go]').onclick = async ev => {
+        const b = ev.currentTarget; b.disabled = true
+        try { const res = await S.importObligations(r.items, (n, tot) => { b.textContent = `${n} / ${tot}` }); close(); toast(`${t('pf.ghl_done')}: ${res.saved} · ${res.made} ${t('pf.ghl_homes')} · ${res.paid} ${t('pf.st_paid').toLowerCase()}`); done() } catch (err) { b.disabled = false; toast(err.message) }
+      }
+    }
+  }, { wide: true })
 }

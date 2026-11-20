@@ -795,7 +795,9 @@ export async function reverseGeocode(lat, lng) {
 
 // ---------- portfolio & finance: recurring payments and what was paid ----------
 let obls = [], pays = []
-const oblRow = r => ({ id: r.id, invId: r.inventory_id, kind: r.kind, dir: r.direction, party: r.party || '', amount: +r.amount || 0, freq: r.frequency, dueDay: r.due_day, dueDate: r.due_date, grace: r.grace_days ?? 5, autopay: !!r.autopay, account: r.account || '', payUrl: r.pay_url || '', active: r.active !== false, notes: r.notes || '' })
+const oblRow = r => ({ id: r.id, invId: r.inventory_id, kind: r.kind, dir: r.direction, party: r.party || '', amount: +r.amount || 0, freq: r.frequency, dueDay: r.due_day, dueDate: r.due_date, grace: r.grace_days ?? 5, autopay: !!r.autopay, account: r.account || '', payUrl: r.pay_url || '', active: r.active !== false, notes: r.notes || '', lien: r.lien || 1, unit: r.unit || '', situation: r.situation || 'normal', extRef: r.ext_ref || '' })
+export const IN_KINDS = ['rent', 'wrap', 'loan']
+export const dirOf = kind => (IN_KINDS.includes(kind) ? 'in' : 'out')
 const payRow = r => ({ id: r.id, oblId: r.obligation_id, period: r.period, dueDate: r.due_date, amountDue: +r.amount_due || 0, paid: +r.amount_paid || 0, lateFee: +r.late_fee || 0, paidOn: r.paid_on, method: r.method || '', reference: r.reference || '', status: r.status, notes: r.notes || '' })
 const ym = d => d.slice(0, 7)
 export const monthStart = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
@@ -865,13 +867,38 @@ export function periodItems(period) {
 }
 export async function saveObligation(ob) {
   if (!ob.dueDate) { const d = (+ob.dueDay || 1); const m0 = monthStart(); ob = { ...ob, dueDate: `${m0.slice(0, 8)}${String(Math.min(d, 28)).padStart(2, '0')}` } }
-  const row = { inventory_id: isUuid(ob.invId) ? ob.invId : null, kind: ob.kind, direction: ob.dir || (ob.kind === 'rent' ? 'in' : 'out'), party: ob.party || null, amount: +ob.amount || 0, frequency: ob.freq || 'monthly', due_day: ob.freq === 'monthly' ? (+ob.dueDay || 1) : null, due_date: ob.dueDate || null, grace_days: ob.grace === '' || ob.grace == null ? 5 : +ob.grace, autopay: !!ob.autopay, account: ob.account || null, pay_url: ob.payUrl || null, active: ob.active !== false, notes: ob.notes || null }
+  const row = { inventory_id: isUuid(ob.invId) ? ob.invId : null, kind: ob.kind, direction: ob.dir || dirOf(ob.kind), party: ob.party || null, amount: +ob.amount || 0, frequency: ob.freq || 'monthly', due_day: ob.freq === 'monthly' ? (+ob.dueDay || 1) : null, due_date: ob.dueDate || null, grace_days: ob.grace === '' || ob.grace == null ? 5 : +ob.grace, autopay: !!ob.autopay, account: ob.account || null, pay_url: ob.payUrl || null, active: ob.active !== false, notes: ob.notes || null, lien: +ob.lien || 1, unit: ob.unit || null, situation: ob.situation || 'normal' }
+  if (ob.extRef) row.ext_ref = ob.extRef
   const clean = { ...ob, dir: row.direction, amount: row.amount, dueDay: row.due_day, grace: row.grace_days }
   if (MODE === 'demo' || !sb) { const l = demoFin().obligations; const ex = l.find(x => x.id === ob.id); if (ex) Object.assign(ex, clean); else l.push({ ...clean, id: uid('ob') }); persist(); emit(); return }
   const q = ob.id && isUuid(ob.id) ? sb.from('obligations').update(row).eq('id', ob.id) : sb.from('obligations').insert(row)
   const { error } = await q
   if (error) throw new Error(/relation|schema cache|column/i.test(error.message) ? t('pf.e_sql') : t('team.e_error'))
   await loadFinance()
+}
+// Bulk import (HighLevel): creates missing homes, then upserts obligations by their HighLevel reference
+// and records this month's payment for the ones HighLevel shows as Paid.
+export async function importObligations(list, onStep = () => {}) {
+  const norm = a => String(a || '').toUpperCase().replace(/[.,#]/g, ' ').replace(/\s+/g, ' ').trim()
+  const homes = new Map(inventory().map(v => [norm(v.address).split(' ').slice(0, 2).join(' '), v]))
+  let made = 0, saved = 0, paid = 0
+  for (const it of list) {
+    let v = it.home ? homes.get(norm(it.home).split(' ').slice(0, 2).join(' ')) : null
+    if (!v && it.home) {
+      v = await saveInventory({ address: it.home, zip: '', status: it.homeStatus || 'owned', acquiredOn: null, purchasePrice: null, rehabBudget: null, rehabActual: null, arv: null, docs: [], statements: [], notes: 'Imported from HighLevel', published: false, listing: {} })
+      homes.set(norm(it.home).split(' ').slice(0, 2).join(' '), v); made++
+    }
+    const ex = obligations().find(o => it.ob.extRef && o.extRef === it.ob.extRef)
+    await saveObligation({ ...(ex || {}), ...it.ob, id: ex?.id, invId: v?.id || null, dir: dirOf(it.ob.kind) })
+    saved++
+    if (it.paidThisMonth) {
+      const ob = obligations().find(o => o.extRef === it.ob.extRef)
+      const p = monthStart(), cur = ob && periodItems(p).find(i => i.ob.id === ob.id)
+      if (cur && !cur.pay) { await recordPayment(cur, { paid: cur.amount, method: 'HighLevel', notes: 'Marked Paid in HighLevel' }); paid++ }
+    }
+    onStep(saved, list.length)
+  }
+  return { made, saved, paid }
 }
 export async function deleteObligation(id) {
   if (MODE === 'demo' || !sb) { db.obligations = demoFin().obligations.filter(x => x.id !== id); db.payments = db.payments.filter(x => x.oblId !== id); persist(); emit(); return }

@@ -2,7 +2,7 @@ import { t } from '../i18n.js'
 import * as S from '../store.js'
 import { esc, money, date, modal, toast, icon, photoUrl } from '../ui.js'
 
-const STAT = ['acquisition', 'rehab', 'listed', 'rented', 'sold']
+const STAT = ['acquisition', 'rehab', 'listed', 'rented', 'financed', 'owned', 'sold']
 const statCls = { acquisition: 'blue', rehab: 'warn', listed: 'gold', rented: 'ok', sold: '' }
 let filter = ''
 
