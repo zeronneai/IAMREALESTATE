@@ -8,6 +8,38 @@ const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || { cha
 const save = st => { try { localStorage.setItem(KEY, JSON.stringify({ ...st, chats: st.chats.slice(0, 40) })) } catch { /* storage full: keep in memory */ } }
 let st = load(), busy = false, draft = ''
 
+// ---------- Voice: talk with the mic (browser speech recognition) and hear answers (browser speech). Free, no keys.
+const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
+const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window
+let rec = null, listening = false, spokeLast = false
+const MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>'
+const vLang = () => (getLang() === 'es' ? 'es-MX' : 'en-US')
+const plain = s => String(s).replace(/[*#`_>]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\n{2,}/g, '. ').replace(/\n/g, ' ')
+export function speak(text) {
+  if (!canSpeak) return
+  speechSynthesis.cancel()
+  const lang = vLang(), voices = speechSynthesis.getVoices()
+  const voice = voices.find(v => v.lang === lang) || voices.find(v => v.lang?.startsWith(lang.slice(0, 2)))
+  // Chrome stops long utterances, so read it sentence by sentence.
+  for (const part of plain(text).match(/[^.!?]+[.!?]*/g) || []) {
+    if (!part.trim()) continue
+    const u = new SpeechSynthesisUtterance(part.trim()); u.lang = lang; if (voice) u.voice = voice; u.rate = 1.03
+    speechSynthesis.speak(u)
+  }
+}
+function toggleMic(el) {
+  if (!SR) return toast(t('jv.no_mic'))
+  if (listening) { rec?.stop(); return }
+  if (canSpeak) speechSynthesis.cancel()
+  rec = new SR(); rec.lang = vLang(); rec.interimResults = true; rec.continuous = false
+  let text = ''
+  rec.onresult = e => { text = Array.from(e.results).map(r => r[0].transcript).join(' '); const ta = el.querySelector('[data-in]'); if (ta) ta.value = text }
+  rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast(t('jv.mic_denied')) }
+  rec.onend = () => { listening = false; rec = null; paintMic(el); const q = text.trim(); if (q) { spokeLast = true; ask(el, q) } }
+  listening = true; paintMic(el); rec.start()
+}
+function paintMic(el) { const b = el.querySelector('[data-mic]'); if (b) { b.classList.toggle('on', listening); b.title = t(listening ? 'jv.listening' : 'jv.mic') } }
+
 // Safe mini markdown: escape first, then bold, headings, bullets, numbered lists, paragraphs.
 function md(s) {
   const lines = esc(s).split('\n'), out = []
@@ -56,19 +88,23 @@ export function jarvisView(el) {
       <button class="btn gold" data-new style="width:100%">${icon('plus')}${esc(t('jv.new'))}</button>
       <div class="jv-list">${st.chats.map(c => `<button class="jv-item ${c.id === st.cur ? 'on' : ''}" data-c="${esc(c.id)}"><b>${esc(c.title || t('jv.untitled'))}</b><small>${esc(new Date(c.at).toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' }))}</small></button>`).join('') || `<p class="muted" style="font-size:13px">${esc(t('jv.none'))}</p>`}</div>
       <label class="chk" style="font-size:13px"><input type="checkbox" data-ctx ${st.ctx ? 'checked' : ''}> ${esc(t('jv.ctx'))}</label>
+      ${canSpeak ? `<label class="chk jv-voice"><input type="checkbox" data-voice ${st.voice ? 'checked' : ''}> ${esc(t('jv.voice'))}</label>` : ''}
       <small class="dim">${esc(t('jv.private'))}</small>
     </aside>
     <section class="jv-main card">
-      <div class="jv-msgs" data-msgs>${chat?.msgs.length ? chat.msgs.map(m => `<div class="jv-bub ${m.role}">${m.role === 'assistant' ? md(m.content) : esc(m.content).replace(/\n/g, '<br>')}</div>`).join('') : `
+      <div class="jv-msgs" data-msgs>${chat?.msgs.length ? chat.msgs.map((m, i) => `<div class="jv-bub ${m.role}">${m.role === 'assistant' ? md(m.content) + (canSpeak ? `<button class="jv-say" data-say="${i}">▶ ${esc(t('jv.speak'))}</button>` : '') : esc(m.content).replace(/\n/g, '<br>')}</div>`).join('') : `
         <div class="jv-hello"><div class="jv-orb">J</div><h3>${esc(t('jv.hello'))}</h3><p class="muted">${esc(t('jv.hello_sub'))}</p>
         <div class="jv-sugg">${SUGGEST[lang === 'es' ? 'es' : 'en'].map(q => `<button class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`}
         ${busy ? `<div class="jv-bub assistant jv-typing"><i></i><i></i><i></i></div>` : ''}</div>
-      <form class="jv-comp" data-f><textarea data-in rows="2" placeholder="${esc(t('jv.ph'))}" ${busy ? 'disabled' : ''}>${esc(draft)}</textarea><button class="btn gold" ${busy ? 'disabled' : ''}>${esc(t('jv.send'))}</button></form>
+      <form class="jv-comp" data-f><textarea data-in rows="2" placeholder="${esc(t('jv.ph'))}" ${busy ? 'disabled' : ''}>${esc(draft)}</textarea><button type="button" class="btn ghost jv-mic ${listening ? 'on' : ''}" data-mic title="${esc(t(listening ? 'jv.listening' : 'jv.mic'))}" ${busy ? 'disabled' : ''}>${MIC}</button><button class="btn gold" ${busy ? 'disabled' : ''}>${esc(t('jv.send'))}</button></form>
     </section></div>`
   const box = el.querySelector('[data-msgs]'); box.scrollTop = box.scrollHeight
   el.querySelector('[data-new]').onclick = () => { st.cur = null; save(st); jarvisView(el); el.querySelector('[data-in]')?.focus() }
   el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { st.cur = b.dataset.c; save(st); jarvisView(el) })
   el.querySelector('[data-ctx]').onchange = e => { st.ctx = e.target.checked; save(st) }
+  el.querySelector('[data-voice]')?.addEventListener('change', e => { st.voice = e.target.checked; save(st); if (!st.voice && canSpeak) speechSynthesis.cancel() })
+  el.querySelector('[data-mic]').onclick = () => toggleMic(el)
+  el.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { if (canSpeak && speechSynthesis.speaking) { speechSynthesis.cancel(); return } speak(chat.msgs[+b.dataset.say].content) })
   el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => ask(el, b.dataset.q))
   const ta = el.querySelector('[data-in]'), f = el.querySelector('[data-f]')
   ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); f.requestSubmit() } }
@@ -92,7 +128,8 @@ async function ask(el, q) {
       reply = j.reply
     }
     chat.msgs.push({ role: 'assistant', content: reply })
+    if (st.voice || spokeLast) speak(reply)
   } catch (e) { toast(e.message); chat.msgs.pop(); draft = q; if (!chat.msgs.length) { st.chats = st.chats.filter(c => c.id !== chat.id); st.cur = null } }
-  busy = false; save(st)
+  busy = false; spokeLast = false; save(st)
   if (document.body.contains(el)) jarvisView(el)
 }

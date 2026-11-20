@@ -13,7 +13,9 @@ const shiftMonth = (p, k) => { const d = new Date(+p.slice(0, 4), +p.slice(5, 7)
 const monthName = p => new Date(+p.slice(0, 4), +p.slice(5, 7) - 1, 1).toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'long', year: 'numeric' })
 const CLS = { paid: 'ok', partial: 'gold', waived: '', late: 'bad', due: 'gold', upcoming: '', autopay: 'blue' }
 export const pill = it => `<span class="pill ${CLS[it.status] || ''}">${esc(t((it.ob.dir === 'in' && it.status === 'paid') ? 'pf.st_received' : 'pf.st_' + it.status))}</span>`
-const what = it => `${t('pf.k_' + it.ob.kind)}${it.ob.lien > 1 ? ' (' + t('pf.lien2') + ')' : ''}${it.ob.unit ? ' ' + it.ob.unit : ''}${it.ob.party ? ' · ' + it.ob.party : ''}${it.ob.situation && it.ob.situation !== 'normal' ? ' · ' + t('pf.s_' + it.ob.situation) : ''}`
+// Custom title if they wrote one, otherwise the type plus the unit ("Rent #14").
+export const obTitle = o => o.label || `${t('pf.k_' + o.kind)}${o.unit ? ' ' + o.unit : ''}`
+const what = it => `${obTitle(it.ob)}${it.ob.lien > 1 ? ' (' + t('pf.lien2') + ')' : ''}${it.ob.party ? ' · ' + it.ob.party : ''}${it.ob.situation && it.ob.situation !== 'normal' ? ' · ' + t('pf.s_' + it.ob.situation) : ''}`
 const sum = (l, f) => l.reduce((a, x) => a + (f(x) || 0), 0)
 
 // ---------- Portfolio ----------
@@ -35,7 +37,7 @@ export function portfolioView(el) {
     <div class="pf-kpi"><small>${esc(t('pf.bills_paid'))}</small><b>${money(paidOut)}</b><span class="muted">${esc(t('pf.of'))} ${money(owed)}</span><div class="pf-bar"><i style="width:${owed ? Math.min(100, paidOut / owed * 100) : 0}%"></i></div></div>
     <div class="pf-kpi"><small>${esc(t('pf.net'))}</small><b class="${got - paidOut < 0 ? 'neg' : ''}">${money(got - paidOut)}</b><span class="muted">${esc(t('pf.net_hint'))} ${money(exp - owed)}</span></div>
   </div>
-  ${late.length ? `<div class="alert bad fade-in pf-late"><b>${esc(t('pf.late_items'))} (${late.length}):</b> ${late.slice(0, 4).map(i => `<button class="linkish" data-it="${esc(i.ob.id)}">${esc(i.inv?.address || i.ob.party)} · ${esc(t('pf.k_' + i.ob.kind))}</button>`).join(' · ')}</div>` : ''}
+  ${late.length ? `<div class="alert bad fade-in pf-late"><b>${esc(t('pf.late_items'))} (${late.length}):</b> ${late.slice(0, 4).map(i => `<button class="linkish" data-it="${esc(i.ob.id)}">${esc(i.inv?.address || i.ob.party)} · ${esc(obTitle(i.ob))}</button>`).join(' · ')}</div>` : ''}
   <div class="card fade-in" style="padding:0">
     <div class="tbl-wrap"><table class="seq-tbl pf-tbl"><thead><tr><th>${esc(t('c.address'))}</th><th>${esc(t('pf.tenant'))}</th><th>${esc(t('pf.income'))}</th><th>${esc(t('pf.k_mortgage'))}</th><th>${esc(t('pf.other'))}</th><th class="num">${esc(t('pf.month_net'))}</th><th></th></tr></thead><tbody>
     ${inv.map(v => {
@@ -63,13 +65,17 @@ function ledger(v, done) {
   const obs = S.obligations().filter(o => o.invId === v.id)
   modal(`<h3>${esc(v.address)}</h3><p class="muted" style="margin:0">${esc(t('pf.ledger_lead'))}</p>
     <div class="tbl-wrap"><table class="pf-grid"><thead><tr><th></th>${months.map(p => `<th>${esc(new Date(+p.slice(0, 4), +p.slice(5, 7) - 1, 1).toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'short' }))}</th>`).join('')}</tr></thead><tbody>
-    ${obs.map(o => `<tr><td><b>${esc(t('pf.k_' + o.kind))}</b><small class="dim">${esc(o.party)} · ${money(o.amount)}${o.autopay ? ' · autopay' : ''}</small><button class="linkish" data-edit="${esc(o.id)}">${esc(t('seq.edit'))}</button></td>${months.map(p => { const it = S.periodItems(p).find(i => i.ob.id === o.id); return `<td>${it ? `<button class="pf-dot ${CLS[it.status] || ''}" data-p="${p}" data-o="${esc(o.id)}" title="${esc(t('pf.st_' + it.status))}"></button>` : ''}</td>` }).join('')}</tr>`).join('')}
+    ${obs.map(o => `<tr><td><b>${esc(obTitle(o))}</b><small class="dim">${esc(o.party)} · ${money(o.amount)}${o.autopay ? ' · autopay' : ''}</small><button class="linkish" data-edit="${esc(o.id)}">${esc(t('seq.edit'))}</button></td>${months.map(p => { const it = S.periodItems(p).find(i => i.ob.id === o.id); return `<td>${it ? `<button class="pf-dot ${CLS[it.status] || ''}" data-p="${p}" data-o="${esc(o.id)}" title="${esc(t('pf.st_' + it.status))}"></button>` : ''}</td>` }).join('')}</tr>`).join('')}
     </tbody></table></div>
+    <div class="pf-notes"><label>${esc(t('pf.home_notes'))}</label><textarea data-hn rows="3" placeholder="${esc(t('pf.home_notes_ph'))}">${esc(v.notes || '')}</textarea><button class="btn sm ghost" data-hns>${esc(t('org.save'))}</button></div>
     <div class="pf-legend">${['paid', 'due', 'late', 'upcoming', 'autopay'].map(s => `<span><i class="pf-dot ${CLS[s]}"></i>${esc(t('pf.st_' + s))}</span>`).join('')}</div>
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap"><button class="btn" data-add>${icon('plus')}${esc(t('pf.add_item'))}</button><button class="btn gold" data-close>${esc(t('va.done'))}</button></div>`, (box, close) => {
     box.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { const it = S.periodItems(b.dataset.p).find(i => i.ob.id === b.dataset.o); close(); payModal(it, done) })
     box.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { close(); oblModal(S.obligations().find(o => o.id === b.dataset.edit), v.id, done) })
     box.querySelector('[data-add]').onclick = () => { close(); oblModal(null, v.id, done) }
+    box.querySelector('[data-hns]').onclick = async () => {
+      try { await S.saveInventory({ ...v, notes: box.querySelector('[data-hn]').value }); toast(t('org.saved')) } catch (err) { toast(err.message) }
+    }
   }, { wide: true })
 }
 
@@ -90,9 +96,11 @@ function setup(v, done) {
 // Create or edit a recurring item or a one time bill.
 export function oblModal(ob, invId, done, preset = null) {
   const o = ob ? { ...ob } : { invId: invId || null, kind: invId ? 'mortgage' : 'other', party: '', amount: '', freq: invId ? 'monthly' : 'once', dueDay: 1, dueDate: '', grace: 5, autopay: false, account: '', payUrl: '', notes: '', lien: 1, unit: '', situation: 'normal', ...(preset || {}) }
+  o.labelWas = ob?.label || ''
   const homes = S.inventory().filter(v => v.status !== 'sold')
   modal(`<h3>${esc(ob ? t('pf.edit_item') : t('pf.add_item'))}</h3>
     <form class="form-grid" data-ob>
+      <div class="f full"><label>${esc(t('pf.title'))}</label><input name="label" value="${esc(o.label || '')}" placeholder="${esc(t('pf.title_ph'))}"></div>
       <div class="f"><label>${esc(t('pf.type'))}</label><select name="kind">${KINDS.map(k => `<option value="${k}" ${o.kind === k ? 'selected' : ''}>${esc(t('pf.k_' + k))}</option>`).join('')}</select></div>
       <div class="f"><label>${esc(t('pf.home'))}</label><select name="invId"><option value="">${esc(t('pf.company_bill'))}</option>${homes.map(v => `<option value="${esc(v.id)}" ${o.invId === v.id ? 'selected' : ''}>${esc(v.address)}</option>`).join('')}</select></div>
       <div class="f"><label>${esc(t('pf.party'))}</label><input name="party" value="${esc(o.party)}" placeholder="${esc(t('pf.party_ph'))}"></div>
@@ -107,7 +115,7 @@ export function oblModal(ob, invId, done, preset = null) {
       <div class="f"><label>${esc(t('pf.lien'))}</label><select name="lien"><option value="1" ${+o.lien !== 2 ? 'selected' : ''}>${esc(t('pf.lien1'))}</option><option value="2" ${+o.lien === 2 ? 'selected' : ''}>${esc(t('pf.lien2'))}</option></select></div>
       <div class="f full"><label>${esc(t('pf.situation'))}</label><select name="situation">${SITS.map(x => `<option value="${x}" ${(o.situation || 'normal') === x ? 'selected' : ''}>${esc(t('pf.s_' + x))}</option>`).join('')}</select></div>
       <label class="chk full"><input type="checkbox" name="autopay" ${o.autopay ? 'checked' : ''}> ${esc(t('pf.autopay'))}</label>
-      <div class="f full"><label>${esc(t('d.notes'))}</label><input name="notes" value="${esc(o.notes)}"></div>
+      <div class="f full"><label>${esc(t('d.notes'))}</label><textarea name="notes" rows="3">${esc(o.notes)}</textarea></div>
       <div class="full" style="display:flex;gap:8px;justify-content:space-between">${ob ? `<button type="button" class="btn ghost danger" data-del>${esc(t('org.delete'))}</button>` : '<span></span>'}<span style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('org.save'))}</button></span></div>
     </form>`, (box, close) => {
     const f = box.querySelector('[data-ob]')
