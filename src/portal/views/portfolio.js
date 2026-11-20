@@ -223,18 +223,32 @@ function rentRediModal(done) {
       const owing = r.pays.filter(x => !(x.amount > 0))
       const rows = r.pays.filter(x => x.amount > 0).map(x => { const it = matchRent(x, cands); return { ...x, obId: it?.ob.id || '' } })
       const label = o => { const v = S.inventory().find(h => h.id === o.invId); return `${v?.address || ''}${o.unit ? ' ' + o.unit : ''} · ${t('pf.k_' + o.kind)}${o.party ? ' · ' + o.party : ''}` }
-      const opts = sel => `<option value="">${esc(t('rr.skip'))}</option>` + rentOpts.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? 'selected' : ''}>${esc(label(o))}</option>`).join('')
+      const opts = sel => `<option value="">${esc(t('rr.skip'))}</option><option value="__new" ${sel === '__new' ? 'selected' : ''}>${esc(t('rr.create'))}</option>` + rentOpts.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? 'selected' : ''}>${esc(label(o))}</option>`).join('')
       const mon = p => new Date(+p.slice(0, 4), +p.slice(5, 7) - 1, 1).toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'short', year: 'numeric' })
       const ok = rows.filter(x => x.obId).length
       prev.innerHTML = `<div class="alert">${rows.length} ${esc(t('rr.pays'))} · <b>${ok}</b> ${esc(t('rr.matched'))} · ${rows.length - ok} ${esc(t('rr.unmatched'))}${r.skipped.length ? ` · ${r.skipped.length} ${esc(t('rr.ignored'))}` : ''}${owing.length ? ` · ${owing.length} ${esc(t('rr.owing'))}` : ''}</div>
         <p class="muted" style="margin:0">${esc(t('rr.note'))}</p>
         <div class="tbl-wrap" style="max-height:320px;overflow:auto"><table class="seq-tbl"><tbody>${rows.map((x, i) => `<tr><td><b>${esc(mon(x.period))}</b><small class="dim" style="display:block">${esc(t('pf.paid_on'))} ${esc(date(x.date))}</small></td><td><b>${esc(x.tenant)}</b><small class="dim" style="display:block">${esc(x.property)}${x.unit ? ' #' + esc(x.unit) : ''}</small></td><td class="num">${money(x.amount)}${x.owed > 0 ? `<small class="dim" style="display:block">${esc(t('rr.still'))} ${money(x.owed)}</small>` : ''}</td><td><select data-i="${i}" style="max-width:300px">${opts(x.obId)}</select></td></tr>`).join('')}</tbody></table></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost" data-x>${esc(t('cancel'))}</button><button class="btn gold" data-go>${esc(t('rr.go'))}</button></div>`
+        <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">${rows.length - ok ? `<button class="btn ghost" data-all-new>${esc(t('rr.create_all'))} (${rows.length - ok})</button>` : '<span></span>'}<span style="display:flex;gap:8px"><button class="btn ghost" data-x>${esc(t('cancel'))}</button><button class="btn gold" data-go>${esc(t('rr.go'))}</button></span></div>`
       prev.querySelectorAll('[data-i]').forEach(s2 => s2.onchange = () => { rows[+s2.dataset.i].obId = s2.value })
+      prev.querySelector('[data-all-new]')?.addEventListener('click', () => { rows.forEach((x, i) => { if (!x.obId) { x.obId = '__new'; const sel = prev.querySelector(`[data-i="${i}"]`); if (sel) sel.value = '__new' } }) })
       prev.querySelector('[data-x]').onclick = close
       prev.querySelector('[data-go]').onclick = async ev => {
         const b = ev.currentTarget; b.disabled = true; let n = 0, skip = rows.filter(x => !x.obId).length
         try {
+          // "Create as new rent": one item per home + unit + tenant (+ type), then its payments land on it.
+          const made = new Map()
+          for (const x of rows.filter(x => x.obId === '__new')) {
+            const key = [x.property, x.unit, x.tenant].join('|').toUpperCase()
+            if (!made.has(key)) {
+              const home = S.inventory().find(v => v.address.toUpperCase().split(/\s+/).slice(0, 2).join(' ') === x.property.toUpperCase().replace(/[.,#&-]/g, ' ').split(/\s+/).slice(0, 2).join(' '))
+                || await S.saveInventory({ address: x.property, zip: '', status: x.type === 'wrap' ? 'financed' : 'rented', acquiredOn: null, purchasePrice: null, rehabBudget: null, rehabActual: null, arv: null, docs: [], statements: [], notes: 'Created from RentRedi', published: false, listing: {} })
+              const extRef = 'rr:' + key
+              await S.saveObligation({ invId: home?.id || null, kind: x.type || 'rent', dir: 'in', party: x.tenant, unit: x.unit ? '#' + x.unit.replace(/^#/, '') : '', amount: Math.round((x.total || x.amount) * 100) / 100, freq: 'monthly', dueDay: 1, dueDate: x.period.slice(0, 8) + '01', grace: 5, autopay: false, account: '', payUrl: '', active: true, lien: 1, situation: 'normal', notes: 'Created from RentRedi', extRef })
+              made.set(key, S.obligations().find(o => o.extRef === extRef)?.id || '')
+            }
+            x.obId = made.get(key)
+          }
           // One payment per item and month: charges in the same month (rent + prorated) add up.
           const groups = new Map()
           for (const x of rows.filter(x => x.obId)) { const k = x.obId + '|' + x.period, g = groups.get(k) || { obId: x.obId, period: x.period, paid: 0, owed: 0, date: x.date, refs: [], method: x.method }; g.paid += x.amount; g.owed += x.owed || 0; if (x.date > g.date) g.date = x.date; g.refs.push(x.ref); groups.set(k, g) }
