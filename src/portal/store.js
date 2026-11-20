@@ -873,7 +873,7 @@ export async function saveObligation(ob) {
   if (MODE === 'demo' || !sb) { const l = demoFin().obligations; const ex = l.find(x => x.id === ob.id); if (ex) Object.assign(ex, clean); else l.push({ ...clean, id: uid('ob') }); persist(); emit(); return }
   const q = ob.id && isUuid(ob.id) ? sb.from('obligations').update(row).eq('id', ob.id) : sb.from('obligations').insert(row)
   const { error } = await q
-  if (error) throw new Error(/relation|schema cache|column/i.test(error.message) ? t('pf.e_sql') : t('team.e_error'))
+  if (error) throw new Error((/relation|schema cache|column/i.test(error.message) ? t('pf.e_sql') : t('team.e_error')) + ' (' + error.message + ')')
   await loadFinance()
 }
 // Bulk import (HighLevel): creates missing homes, then upserts obligations by their HighLevel reference
