@@ -57,9 +57,10 @@ export default async function handler(req, res) {
   while (msgs.length && msgs[0].role !== 'user') msgs.shift()
   if (!msgs.length) return res.status(400).json({ code: 'empty' })
   const ctx = String(b.context || '').slice(0, 6000)
-  const system = SYSTEM + (ctx ? `\n\nPortal snapshot (today ${new Date().toISOString().slice(0, 10)}):\n${ctx}` : '')
+  const brief = b.mode === 'brief'
+  const system = SYSTEM + (brief ? '\n\nDAILY BRIEF MODE: you get the list of alerts the portal found today. Write a short morning brief for the team: one greeting line, then the 3 to 6 things that matter most today in order of priority (money that is late or due, auctions, people waiting for an answer, appointments), each in one line with the amount or date. End with one line of what to do first. No intro about yourself, no more than 120 words.' : '') + (ctx ? `\n\nPortal snapshot (today ${new Date().toISOString().slice(0, 10)}):\n${ctx}` : '')
   try {
-    const reply = await claude({ system, messages: msgs, max: 1600, model: process.env.ANTHROPIC_JARVIS_MODEL || 'claude-sonnet-5-5' })
+    const reply = await claude({ system, messages: msgs, max: brief ? 600 : 1600, model: process.env.ANTHROPIC_JARVIS_MODEL || 'claude-sonnet-5-5' })
     return res.status(200).json({ reply: String(reply || '').replace(/[—–]/g, ', ').trim() })
   } catch {
     return res.status(502).json({ code: 'llm_failed' })

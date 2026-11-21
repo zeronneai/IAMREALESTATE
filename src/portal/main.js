@@ -1,3 +1,4 @@
+import { bellHtml, mountBell } from './alerts.js'
 import './portal.css'
 import { applyBrand } from './brand.js'
 import { t, getLang, setLang, onLang } from './i18n.js'
@@ -96,6 +97,7 @@ function shell() {
         <button class="burger" aria-label="menu" data-burger>${icon('menu')}</button>
         <h1 id="title"></h1>
         <div class="search">${icon('search')}<input id="q" type="search" autocomplete="off" placeholder="${esc(t('search'))}" aria-label="${esc(t('search'))}" /><div class="search-res" id="qres" hidden></div></div>
+        ${bellHtml()}
         <button class="theme-tg" data-theme title="${esc(t('theme.toggle'))}" aria-label="${esc(t('theme.toggle'))}">${document.documentElement.classList.contains('dark') ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>'}</button>
         <div class="lang"><button data-lang="en" class="${getLang() === 'en' ? 'on' : ''}">EN</button><button data-lang="es" class="${getLang() === 'es' ? 'on' : ''}">ES</button></div>
       </header>
@@ -104,6 +106,7 @@ function shell() {
   </div>`
   $('[data-acct]').onclick = e => acctMenu(e.currentTarget)
   $('[data-install]')?.addEventListener('click', installApp)
+  mountBell()
   $$('[data-lang]').forEach(b => b.onclick = () => setLang(b.dataset.lang))
   $('[data-theme]')?.addEventListener('click', () => { const dark = !document.documentElement.classList.contains('dark'); document.documentElement.classList.toggle('dark', dark); try { localStorage.setItem('iam_theme', dark ? 'dark' : 'light') } catch {} ; shell(); route() })
   $('[data-burger]').onclick = () => $('#side').classList.toggle('open')

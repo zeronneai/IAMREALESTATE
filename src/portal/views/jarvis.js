@@ -1,4 +1,5 @@
 // Jarvis: brainstorm with Claude. Chats are kept in this browser; the portal snapshot is optional.
+import { computeAlerts, alertsText } from '../alerts.js'
 import { t, getLang } from '../i18n.js'
 import * as S from '../store.js'
 import { esc, toast, icon } from '../ui.js'
@@ -116,6 +117,7 @@ function snapshot() {
     `Homes for sale (${inv.length}): ${inv.join('; ') || 'none loaded'}`,
     `Contacts: ${ppl.length} total, ${Object.entries(kinds).map(([k, n]) => `${n} ${k}`).join(', ')}.`,
     `Foreclosure leads with an upcoming sale: ${fc.length}. Upcoming appointments: ${appts.length}.`,
+    `Alerts the portal found today:\n${alertsText(computeAlerts()) || 'none'}`,
   ].filter(Boolean).join('\n')
 }
 
