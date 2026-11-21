@@ -90,7 +90,7 @@ export function initListings({ onTour }) {
         ${l.type !== 'rent' && l.price && !hasTerms(l) ? `<div class="lm-pay"><span>${t('lm.est')}</span><strong>${money(payment(l.price))}${t('homes.mo')}</strong><small>${t('lm.estD')}</small></div>` : ''}
         <div class="lm-actions">
           ${l.tour ? `<button type="button" class="btn btn-gold" id="lmTour">${t('lm.tour')} <span aria-hidden="true">→</span></button>` : ''}
-          <a class="btn btn-ghost-dark" href="tel:${l.type === 'rent' ? '+19154653384' : '+19152680716'}">${t('lm.sched')}</a>
+          <a class="btn btn-ghost-dark" href="tel:${l.type === 'rent' ? '+19154653384' : '+19152062916'}">${t('lm.sched')}</a>
         </div>
         ${l.real ? '' : `<p class="fineprint">${t('lm.note')}</p>`}
       </div>`

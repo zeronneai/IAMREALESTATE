@@ -1128,3 +1128,15 @@ html.dark .search input { background: var(--ink-1); border-color: var(--line-2);
 .jv-vpick { display: grid; gap: 4px; } .jv-vpick label { font-size: 12px; color: var(--dim); } .jv-vpick select { width: 100%; }
 .pub-terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 12px; border: 1px solid var(--line-2); border-radius: 14px; }
 .pub-terms .chk, .pub-terms .full { grid-column: 1 / -1; }
+.app-btn { width: 100%; justify-content: center; margin-bottom: 8px; }
+.app-steps { display: grid; gap: 6px; } .app-steps ol { margin: 0 0 8px; padding-left: 20px; } .app-steps li { margin: 3px 0; }
+/* Dashboard map colors */
+.map-legend { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 10px; }
+.map-legend label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--line-2); border-radius: 999px; cursor: pointer; opacity: .55; }
+.map-legend label.on { opacity: 1; }
+.map-legend input { display: none; }
+.map-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.pin-lg { width: 18px; height: 18px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.pop-ph { display: block; width: 220px; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 6px; }
+.pop-k { display: inline-block; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-bottom: 4px; }
+.pop-note { font-size: 12px; color: #555; margin: 2px 0 6px; max-width: 220px; }

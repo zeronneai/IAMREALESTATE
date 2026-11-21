@@ -61,6 +61,19 @@ function parseHash() {
 const initials = e => String(e || '?').split(/[@.\s]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('') || '?'
 const credit = () => `<span class="credit">${esc(t('credit.by'))} <b>PURPLE ROOTS</b></span>`
 
+// Install the portal on a phone or computer (home screen shortcut that opens full screen).
+let installEvt = null
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e })
+const standalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone
+function installApp() {
+  if (installEvt) { installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null }); return }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
+  modal(`<h3>${esc(t('app.title'))}</h3><p class="muted" style="margin:0">${esc(t('app.lead'))}</p>
+    <div class="app-steps"><b>${esc(t(ios ? 'app.ios' : 'app.android'))}</b><ol>${t(ios ? 'app.ios_steps' : 'app.android_steps').split('|').map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+    <b>${esc(t(ios ? 'app.android' : 'app.ios'))}</b><ol>${t(ios ? 'app.android_steps' : 'app.ios_steps').split('|').map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
+    <div style="display:flex;justify-content:flex-end"><button class="btn gold" data-close>${esc(t('va.done'))}</button></div>`)
+}
+
 function shell() {
   app.className = ''
   const demo = S.MODE === 'demo'
@@ -73,6 +86,7 @@ function shell() {
       ${brandMark()}
       <nav class="nav" aria-label="Portal">${Object.entries(ROUTES).filter(([k]) => allowed(k)).map(([k, r]) => `<a href="#/${k}" data-r="${k}">${icon(r.icon)}<span>${esc(t('nav.' + k))}</span>${r.count ? `<span class="count">${r.count()}</span>` : ''}</a>`).join('')}</nav>
       <div class="side-foot">
+        ${standalone() ? '' : `<button class="btn sm ghost app-btn" data-install>${icon('download')}${esc(t('app.btn'))}</button>`}
         <button class="acct" data-acct aria-haspopup="menu"><span class="av">${esc(initials(S.userEmail()))}</span><span class="who"><b>${esc(S.userEmail())}</b><small>${esc([S.orgName(), t('role.' + (S.role() || 'viewer'))].filter(Boolean).join(' · '))}</small></span></button>
         ${credit()}
       </div>
@@ -89,6 +103,7 @@ function shell() {
     </div>
   </div>`
   $('[data-acct]').onclick = e => acctMenu(e.currentTarget)
+  $('[data-install]')?.addEventListener('click', installApp)
   $$('[data-lang]').forEach(b => b.onclick = () => setLang(b.dataset.lang))
   $('[data-theme]')?.addEventListener('click', () => { const dark = !document.documentElement.classList.contains('dark'); document.documentElement.classList.toggle('dark', dark); try { localStorage.setItem('iam_theme', dark ? 'dark' : 'light') } catch {} ; shell(); route() })
   $('[data-burger]').onclick = () => $('#side').classList.toggle('open')

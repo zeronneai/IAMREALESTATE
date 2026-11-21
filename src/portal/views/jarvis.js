@@ -124,7 +124,12 @@ const SUGGEST = {
   es: ['Dame 5 ideas de anuncios de Facebook para encontrar vendedores motivados en El Paso', '¿Cómo estructuramos el financiamiento del dueño de una casa de $230k?', 'Escribe un texto para darle seguimiento a inquilinos atrasados', '¿En qué nos enfocamos esta semana según nuestros números?'],
 }
 
+// "Analyze deal" from a property: open Jarvis in a new chat and ask for the sub-to analysis.
+let pending = null
+export function analyzeDeal(brief) { pending = brief; st.cur = null; save(st); location.hash = '#jarvis' }
+
 export function jarvisView(el) {
+  if (pending) { const b = pending; pending = null; st.cur = null; setTimeout(() => ask(el, t('jv.deal_q') + '\n\n' + b), 0) }
   const chat = st.chats.find(c => c.id === st.cur) || null
   const lang = getLang()
   el.innerHTML = `<div class="jv fade-in">

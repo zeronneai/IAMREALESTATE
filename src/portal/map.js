@@ -9,7 +9,7 @@ async function lib() {
   return L
 }
 
-export async function mountMap(el, parcels, { onOpen, zoom = 11 } = {}) {
+export async function mountMap(el, parcels, { onOpen, zoom = 11, colorOf = null, extra = null } = {}) {
   const L = await lib()
   if (el._map) { el._map.remove(); el._map = null }
   const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: true, wheelPxPerZoomLevel: 90 }).setView([31.80, -106.40], zoom)
@@ -22,9 +22,11 @@ export async function mountMap(el, parcels, { onOpen, zoom = 11 } = {}) {
   for (const p of parcels) {
     if (p.lat == null || p.lng == null) continue
     pts.push([p.lat, p.lng])
-    const c = scoreInk(p._score)
-    const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: `<div class="pin" style="background:${c}"></div>`, iconSize: [14, 14], iconAnchor: [7, 7] }) }).addTo(map)
-    m.bindPopup(`<b>${esc(p.address)}</b><br/>${esc(p.owners?.[0]?.name || '')}<br/>${p.foreclosure ? 'Sale ' + esc(date(p.foreclosure.saleDate)) + '<br/>' : ''}Equity ${esc(money(p._d.equity, true))} · Score ${p._score}<br/><a href="#" data-open="${esc(p.id)}">Open</a>`)
+    const c = colorOf ? colorOf(p) : scoreInk(p._score)
+    if (!c) continue
+    const big = !!colorOf
+    const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: `<div class="pin${big ? ' pin-lg' : ''}" style="background:${c}"></div>`, iconSize: big ? [18, 18] : [14, 14], iconAnchor: big ? [9, 9] : [7, 7] }) }).addTo(map)
+    m.bindPopup(`${extra ? extra(p) : ''}<b>${esc(p.address)}</b><br/>${esc(p.owners?.[0]?.name || '')}<br/>${p.foreclosure ? 'Sale ' + esc(date(p.foreclosure.saleDate)) + '<br/>' : ''}Equity ${esc(money(p._d.equity, true))} · Score ${p._score}<br/><a href="#" data-open="${esc(p.id)}">Open</a>`)
   }
   map.on('popupopen', e => {
     const a = e.popup.getElement()?.querySelector('[data-open]')

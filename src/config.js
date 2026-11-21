@@ -11,11 +11,11 @@ export const LEAD_ENDPOINT = ''
 export const CHAT_USE_LLM = true
 
 export const PHONES = {
-  main: { label: '855 305 2048', tel: '+18553052048' },
+  main: { label: '915 206 2916', tel: '+19152062916' },
   buy: { label: '915 268 0716', tel: '+19152680716' },
   sell: { label: '915 348 3560', tel: '+19153483560' },
   manage: { label: '915 465 3384', tel: '+19154653384' },
-  invest: { label: '855 305 2048', tel: '+18553052048' },
+  invest: { label: '915 206 2916', tel: '+19152062916' },
 }
 
 // Cash offer vs listing assumptions (EDIT WITH IAM'S REAL NUMBERS).

@@ -5,8 +5,30 @@ import { firstTuesdays, today, daysUntil } from '../score.js'
 import { openDrawer } from '../drawer.js'
 import { mountMap } from '../map.js'
 
+// Map colors asked by I AM: red = foreclosures, green = working this month, blue = homes we own.
+const PIN = { own: '#2f6fed', work: '#22a55a', fc: '#e5484d', other: '#9a9a9a' }
+const mapShow = { own: true, work: true, fc: true, other: false }
+const WORKING = ['contacted', 'appointment', 'offer', 'under_contract']
+// Our homes: linked to the property, or same street number and street name.
+const key = a => String(a || '').toUpperCase().replace(/[.,#&-]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 2).join(' ')
+const ownedOf = p => S.inventoryFor(p.id) || S.inventory().find(v => v.status !== 'sold' && key(v.address) === key(p.address)) || null
+function pinOf(p) {
+  const v = ownedOf(p)
+  if (v && v.status !== 'sold') return 'own'
+  if (WORKING.includes(p.status)) return 'work'
+  if (p.foreclosure && (p._d?.daysToSale ?? -1) >= 0) return 'fc'
+  return 'other'
+}
+// Top of the pin popup: a photo (team photo or listing photo), the type and the latest note.
+function popTop(p) {
+  const v = ownedOf(p), ph = (p.photos || [])[0] || v?.listing?.photos?.[0]
+  const k = pinOf(p), note = (p.activities || []).find(a => a.kind === 'note')?.body || p.notes || v?.notes || ''
+  return `${ph ? `<img class="pop-ph" src="${esc(ph)}" alt="">` : ''}<span class="pop-k" style="background:${PIN[k]}">${esc(t('dash.pin_' + k))}</span>${note ? `<div class="pop-note">${esc(String(note).slice(0, 140))}</div>` : ''}`
+}
+
 export function dashboard(el) {
   const ps = S.parcels()
+  const counts = { own: 0, work: 0, fc: 0, other: 0 }; ps.filter(p => p.status !== 'dead').forEach(p => counts[pinOf(p)]++)
   const fcs = ps.filter(p => p.foreclosure && p._d.daysToSale >= 0)
   const sales = firstTuesdays(today(), 3)
   const next = sales[0]
@@ -51,7 +73,7 @@ export function dashboard(el) {
     </div>
   </div>
   <div class="grid-2">
-    <div class="card fade-in"><h3>${esc(t('dash.map'))}</h3><div class="map" id="dmap"></div></div>
+    <div class="card fade-in"><h3>${esc(t('dash.map'))}</h3><div class="map-legend">${Object.entries(PIN).map(([k, c]) => `<label class="${mapShow[k] ? 'on' : ''}"><input type="checkbox" data-pin="${k}" ${mapShow[k] ? 'checked' : ''}><i style="background:${c}"></i>${esc(t('dash.pin_' + k))} <span class="dim">${counts[k]}</span></label>`).join('')}</div><div class="map" id="dmap"></div></div>
     <div style="display:grid;gap:18px;align-content:start">
       <div class="card fade-in"><h3>${esc(t('dash.pipeline'))}</h3><div class="funnel">${stages.map((s, i) => `<div class="funnel-row"><span>${esc(t('st.' + s))}</span><span class="b"><i style="width:${(stageN[i] / maxS) * 100}%"></i></span><span class="mono">${stageN[i]}</span></div>`).join('')}</div></div>
       <div class="card fade-in"><h3>${esc(t('dash.tasks'))}</h3>${tasks.length ? tasks.map(x => `<div class="task" data-open="${esc(x.p.id)}" style="cursor:pointer"><span class="pill ${daysUntil(x.due) < 0 ? 'bad' : ''}">${esc(x.due ? date(x.due) : '')}</span><span>${esc(x.title)}</span><span class="dim" style="font-size:12px">${esc(x.p.address)}</span></div>`).join('') : `<p class="muted">${esc(t('dash.none'))}</p>`}</div>
@@ -59,5 +81,7 @@ export function dashboard(el) {
   </div>`
   el.querySelectorAll('[data-sale]').forEach(r => r.onclick = () => { location.hash = '#/foreclosures?sale=' + r.dataset.sale })
   el.querySelectorAll('[data-open]').forEach(r => r.onclick = () => openDrawer(r.dataset.open))
-  mountMap(el.querySelector('#dmap'), ps.filter(p => p.status !== 'dead'), { onOpen: openDrawer })
+  el.querySelectorAll('[data-pin]').forEach(c => c.onchange = () => { mapShow[c.dataset.pin] = c.checked; dashboard(el) })
+  const live = ps.filter(p => p.status !== 'dead')
+  mountMap(el.querySelector('#dmap'), live, { onOpen: openDrawer, colorOf: p => { const k = pinOf(p); return mapShow[k] ? PIN[k] : null }, extra: popTop })
 }

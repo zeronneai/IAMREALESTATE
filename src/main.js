@@ -22,7 +22,7 @@ const FAQ = [
   [['Can I invest with limited capital?', '¿Puedo invertir con poco capital?'], ['Yes. Through joint ventures and partnerships you can participate in deals while our team handles sourcing, renovation and management.', 'Sí. Con joint ventures y sociedades participas en los negocios mientras nuestro equipo se encarga de encontrar, remodelar y administrar.']],
   [['Do you offer property management?', '¿Ofrecen administración de propiedades?'], ['Yes, full service: tenant screening, leases, rent collection, maintenance and monthly owner statements.', 'Sí, servicio completo: evaluación de inquilinos, contratos, cobro de renta, mantenimiento y estados de cuenta mensuales.']],
   [['Can I tour homes from Juárez or out of state?', '¿Puedo ver casas desde Juárez o desde otro estado?'], ['Yes. Our listings include 3D tours and we run live video showings in English or Spanish.', 'Sí. Nuestras propiedades incluyen tours 3D y hacemos visitas en video en vivo en inglés o español.']],
-  [['How do I get started?', '¿Cómo empiezo?'], ['Call 855 305 2048, use the assistant at the bottom right, or pick your path at the top of this page.', 'Llama al 855 305 2048, usa el asistente abajo a la derecha o elige tu camino arriba en esta página.']],
+  [['How do I get started?', '¿Cómo empiezo?'], ['Call 915 206 2916, use the assistant at the bottom right, or pick your path at the top of this page.', 'Llama al 915 206 2916, usa el asistente abajo a la derecha o elige tu camino arriba en esta página.']],
 ]
 const L = v => v[getLang() === 'es' ? 1 : 0]
 

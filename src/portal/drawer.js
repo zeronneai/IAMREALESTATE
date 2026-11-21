@@ -1,4 +1,5 @@
 // Property detail drawer: everything the client asked to see on one screen.
+import { analyzeDeal } from './views/jarvis.js'
 import { t } from './i18n.js'
 import * as S from './store.js'
 import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl, photoBox, modal } from './ui.js'
@@ -49,6 +50,7 @@ function render(dr) {
     <h2>${esc(p.address)}</h2>
     <div class="muted">${esc([`${p.city || ''}, ${p.state || ''} ${p.zip || ''}`.trim(), p.type, p.epcadId ? 'EPCAD ' + p.epcadId : ''].filter(Boolean).join(' · '))}</div>
     <div class="links" style="margin-top:12px">
+      <button class="btn sm jv-deal" data-deal>${icon('spark')}${esc(t('jv.analyze'))}</button>
       <button class="btn gold sm" data-skip>${icon('phone')}${esc(t('d.skip'))}</button>
       ${(p.contacts || []).length ? `<button class="btn sm" data-msg>${icon('inbox')}${esc(t('msg.button'))}</button>` : ''}
       ${(p.contacts || []).length ? `<button class="btn sm" data-seq>${esc(t('sel.seq'))}</button>` : ''}
@@ -150,6 +152,7 @@ function render(dr) {
 
   $('.dr-body', dr).scrollTop = keepScroll
   $('[data-x]', dr).onclick = closeDrawer
+  $('[data-deal]', dr).onclick = () => { const brief = dealBrief(p); closeDrawer(); analyzeDeal(brief) }
   dr.querySelectorAll('[data-mine]').forEach(fg => fg.onclick = () => modal(`<div class="ph-big"><img src="${esc(p.photos[+fg.dataset.mine])}" alt=""></div><div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn sm gold" data-close>OK</button></div>`, null, { wide: true }))
   dr.querySelectorAll('[data-ph]').forEach(fg => fg.onclick = () => photoBox(p, fg.dataset.ph))
   dr.querySelectorAll('[data-sms]').forEach(b => b.onclick = () => { closeDrawer(); startConversation(p.id, b.dataset.sms) })
@@ -194,4 +197,21 @@ function boughtModal(p) {
       try { await S.moveToInventory(p.id, { acquiredOn: fd.acquiredOn, status: fd.status, purchasePrice: num(fd.purchasePrice), rehabBudget: num(fd.rehabBudget) }); close(); toast(t('own.done')) } catch { toast(t('team.e_error')) }
     }
   })
+}
+
+// What Jarvis gets to analyze a deal: the property facts only (no owner names, phones or emails).
+function dealBrief(p) {
+  const d = p._d || {}, f = p.foreclosure, money = n => n ? '$' + Math.round(n).toLocaleString('en-US') : ''
+  const lines = [
+    `Address: ${[p.address, p.city, p.state, p.zip].filter(Boolean).join(', ')}`,
+    [p.type, p.beds ? p.beds + ' bed' : '', p.baths ? p.baths + ' bath' : '', p.sqft ? p.sqft + ' sqft' : '', p.yearBuilt ? 'built ' + p.yearBuilt : '', p.vacant ? 'vacant' : ''].filter(Boolean).join(', '),
+    p.marketValue ? `Appraisal district value: ${money(p.marketValue)}${p.valueEstimated ? ' (estimated)' : ''}` : '',
+    d.mortgageBal ? `Estimated loan balance: ${money(d.mortgageBal)}` : '',
+    f ? `Foreclosure: auction ${f.saleDate || 'date unknown'}${d.daysToSale >= 0 ? ` (in ${d.daysToSale} days)` : ''}${f.mortgagee ? ', lender ' + f.mortgagee : ''}${f.servicer ? ', servicer ' + f.servicer : ''}${f.originalLoan ? ', original loan ' + money(f.originalLoan) : ''}${f.dotDate ? ', deed of trust ' + f.dotDate : ''}${f.estBalance ? ', est. balance ' + money(f.estBalance) : ''}` : '',
+    (p.liens || []).length ? `Other liens: ${p.liens.map(l => `${l.type || 'lien'} ${money(l.amount)}`).join('; ')}` : '',
+    d.taxDue ? `Back taxes owed: ${money(d.taxDue)}` : 'Back taxes: none on file',
+    (p.owners || []).some(o => o.absentee) ? 'Owner is absentee' : '', (p.owners || []).some(o => o.deceased) ? 'Owner may be deceased (probate)' : '',
+    p.notes ? `Team notes: ${String(p.notes).slice(0, 600)}` : '',
+  ].filter(Boolean)
+  return lines.join('\n')
 }
