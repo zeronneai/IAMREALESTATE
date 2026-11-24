@@ -252,11 +252,19 @@ async function renderOrgs(root) {
     row.querySelector('[data-enter]')?.addEventListener('click', async () => { try { await S.orgEnter(o.id); toast(o.name); renderOrgs(root) } catch (err) { toast(err.message) } })
     row.querySelector('[data-msgcfg]').onclick = () => modal(`<h3>${esc(t('org.msg'))} · ${esc(o.name)}</h3><p class="muted" style="margin:0">${esc(t('org.msg_hint'))}</p>
       <form style="display:grid;gap:12px">
-        <div class="f"><label>${esc(t('org.sms_number'))}</label><input name="sms_number" value="${esc(o.sms_number || '')}" placeholder="(915) 555-0123" autocomplete="off"></div>
+        <div class="f"><label>${esc(t('org.sms_number'))}</label><div class="ib-row"><input name="sms_number" value="${esc(o.sms_number || '')}" placeholder="(915) 555-0123" autocomplete="off" style="flex:1"><button type="button" class="btn ghost" data-connect title="${esc(t('org.connect_hint'))}">${esc(t('org.connect'))}</button></div><small class="muted">${esc(t('org.connect_hint'))}</small></div>
         <div class="f"><label>${esc(t('org.email_from'))}</label><input name="email_from" value="${esc(o.email_from || '')}" placeholder="${esc(o.name)} <hello@company.com>" autocomplete="off"></div>
         <div class="f"><label>${esc(t('org.reply_to'))}</label><input name="reply_to" type="email" value="${esc(o.reply_to || '')}" placeholder="office@company.com" autocomplete="off"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('org.save'))}</button></div>
       </form>`, (b, close) => {
+      b.querySelector('[data-connect]').onclick = async ev => {
+        const btn = ev.currentTarget; btn.disabled = true
+        try {
+          const r = await fetch('/api/outreach/connect', { method: 'POST', headers: { 'Content-Type': 'application/json', ...S.authHeader() }, body: JSON.stringify({ number: b.querySelector('[name=sms_number]').value }) })
+          const j = await r.json().catch(() => ({}))
+          toast(r.ok ? t('org.connected') + ' ' + j.number : (j.error || t('org.connect_fail')))
+        } catch (err) { toast(err.message) } finally { btn.disabled = false }
+      }
       b.querySelector('form').onsubmit = async e => { e.preventDefault(); try { await S.orgUpdate(o.id, Object.fromEntries(new FormData(e.target))); close(); toast(t('org.saved')); renderOrgs(root) } catch (err) { toast(err.message) } }
     })
     row.querySelector('[data-pause]').onclick = async () => { try { await S.orgUpdate(o.id, { active: !o.active }); toast(t('org.saved')); renderOrgs(root) } catch (err) { toast(err.message) } }

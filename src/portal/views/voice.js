@@ -39,6 +39,9 @@ export function voiceView(el) {
           : `<div class="alert" style="font-size:12.5px">${esc(cart.state === 'loading' ? t('va.cart_loading') : t('va.cart_off'))}</div>`}
         <div class="ib-row"><div class="f" style="flex:1"><label>${esc(t('va.hours'))}</label><input name="hours" value="${esc(c.hours)}"></div>
           <div class="f" style="flex:1"><label>${esc(t('va.transfer'))}</label><input name="transfer" value="${esc(c.transfer)}" placeholder="(915) 555-0123"></div></div>
+        <div class="va-sms"><label class="chk"><input type="checkbox" name="sms_on" ${c.sms_on === true || c.sms_on === 'on' ? 'checked' : ''}> <b>${esc(t('va.sms_on'))}</b></label>
+          <small class="muted">${esc(t('va.sms_lead'))}</small>
+          <div class="f"><label>${esc(t('va.sms_handoff'))}</label><input name="sms_handoff_hours" type="number" min="1" max="72" value="${esc(c.sms_handoff_hours || 12)}" style="max-width:120px"></div></div>
         <div class="f"><label>${esc(t('va.notes'))}</label><textarea name="notes" rows="2" placeholder="${esc(t('va.notes_ph'))}">${esc(c.notes)}</textarea></div>
         <div style="display:flex;justify-content:flex-end"><button class="btn gold">${esc(t('org.save'))}</button></div>
       </form>
@@ -63,7 +66,7 @@ export function voiceView(el) {
   el.querySelector('[data-cfg]').onsubmit = async e => {
     e.preventDefault()
     const fd = new FormData(e.target)
-    const cfg = { ...Object.fromEntries([...fd].filter(([k]) => k !== 'ask')), ask: fd.getAll('ask') }
+    const cfg = { ...Object.fromEntries([...fd].filter(([k]) => k !== 'ask')), ask: fd.getAll('ask'), sms_on: fd.get('sms_on') === 'on' }
     await S.saveSettings({ voiceAgent: cfg }); toast(t('org.saved'))
   }
   el.querySelectorAll('[data-hear]').forEach(b => b.onclick = async () => {

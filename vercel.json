@@ -29,6 +29,9 @@
     },
     "api/outreach/run.js": {
       "maxDuration": 120
+    },
+    "api/outreach/inbound.js": {
+      "maxDuration": 30
     }
   },
   "crons": [

@@ -1159,3 +1159,4 @@ html:not(.dark) .al-panel { background: #fff; }
 .al-item.seen { opacity: .5; }
 @media (max-width: 640px) { .al-panel { position: fixed; left: 4vw; right: 4vw; top: 64px; width: auto; } }
 html.dark .al-item, html.dark .al-item:visited { color: #ececec; } html:not(.dark) .al-item { color: #1a1a1a; }
+.va-sms { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line-2); border-radius: 12px; }
