@@ -19,6 +19,33 @@ function pinOf(p) {
   if (p.foreclosure && (p._d?.daysToSale ?? -1) >= 0) return 'fc'
   return 'other'
 }
+// Our homes with no mapped property: pin them from their own address (geocoded once and saved on the home).
+const geoTried = new Set()
+function homePins(ps) {
+  const mapped = new Set(ps.filter(p => p.lat != null && p.status !== 'dead').map(p => ownedOf(p)?.id).filter(Boolean))
+  return S.inventory().filter(v => v.status !== 'sold' && !mapped.has(v.id))
+}
+function homeHtml(v) {
+  const ph = v.listing?.photos?.[0], note = v.notes || ''
+  return `${ph ? `<img class="pop-ph" src="${esc(ph)}" alt="">` : ''}<span class="pop-k" style="background:${PIN.own}">${esc(t('dash.pin_own'))}</span>${note ? `<div class="pop-note">${esc(String(note).slice(0, 140))}</div>` : ''}<b>${esc(v.address)}</b><br/>${esc(t('is.' + v.status))}<br/><a href="#/inventory">${esc(t('dash.pin_open_home'))}</a>`
+}
+async function geocodeHomes(list, el) {
+  if (S.MODE === 'demo') return
+  const todo = list.filter(v => !v.listing?.geo && !geoTried.has(v.id) && v.address).slice(0, 12)
+  if (!todo.length) return
+  let n = 0
+  for (const v of todo) {
+    geoTried.add(v.id)
+    try {
+      const r = await fetch(`/api/geocode?address=${encodeURIComponent(v.address)}&zip=${encodeURIComponent(v.zip || '')}`, { headers: S.authHeader() })
+      if (!r.ok) continue
+      const g = await r.json()
+      if (isFinite(g.lat) && isFinite(g.lng)) { await S.saveInventory({ ...v, listing: { ...(v.listing || {}), geo: { lat: g.lat, lng: g.lng } } }); n++ }
+    } catch {}
+  }
+  if (n && el.isConnected) dashboard(el)
+}
+
 // Top of the pin popup: a photo (team photo or listing photo), the type and the latest note.
 function popTop(p) {
   const v = ownedOf(p), ph = (p.photos || [])[0] || v?.listing?.photos?.[0]
@@ -29,6 +56,7 @@ function popTop(p) {
 export function dashboard(el) {
   const ps = S.parcels()
   const counts = { own: 0, work: 0, fc: 0, other: 0 }; ps.filter(p => p.status !== 'dead').forEach(p => counts[pinOf(p)]++)
+  const homes = homePins(ps); counts.own += homes.length
   const fcs = ps.filter(p => p.foreclosure && p._d.daysToSale >= 0)
   const sales = firstTuesdays(today(), 3)
   const next = sales[0]
@@ -83,5 +111,7 @@ export function dashboard(el) {
   el.querySelectorAll('[data-open]').forEach(r => r.onclick = () => openDrawer(r.dataset.open))
   el.querySelectorAll('[data-pin]').forEach(c => c.onchange = () => { mapShow[c.dataset.pin] = c.checked; dashboard(el) })
   const live = ps.filter(p => p.status !== 'dead')
-  mountMap(el.querySelector('#dmap'), live, { onOpen: openDrawer, colorOf: p => { const k = pinOf(p); return mapShow[k] ? PIN[k] : null }, extra: popTop })
+  const extraPins = homes.filter(v => v.listing?.geo).map(v => ({ id: 'inv-' + v.id, _inv: v, lat: v.listing.geo.lat, lng: v.listing.geo.lng, _html: homeHtml(v) }))
+  mountMap(el.querySelector('#dmap'), [...live, ...extraPins], { onOpen: openDrawer, colorOf: p => { if (p._inv) return mapShow.own ? PIN.own : null; const k = pinOf(p); return mapShow[k] ? PIN[k] : null }, extra: popTop })
+  geocodeHomes(homes, el)
 }

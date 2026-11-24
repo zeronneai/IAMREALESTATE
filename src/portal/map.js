@@ -26,6 +26,7 @@ export async function mountMap(el, parcels, { onOpen, zoom = 11, colorOf = null,
     if (!c) continue
     const big = !!colorOf
     const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: `<div class="pin${big ? ' pin-lg' : ''}" style="background:${c}"></div>`, iconSize: big ? [18, 18] : [14, 14], iconAnchor: big ? [9, 9] : [7, 7] }) }).addTo(map)
+    if (p._html) { m.bindPopup(p._html); continue }
     m.bindPopup(`${extra ? extra(p) : ''}<b>${esc(p.address)}</b><br/>${esc(p.owners?.[0]?.name || '')}<br/>${p.foreclosure ? 'Sale ' + esc(date(p.foreclosure.saleDate)) + '<br/>' : ''}Equity ${esc(money(p._d.equity, true))} · Score ${p._score}<br/><a href="#" data-open="${esc(p.id)}">Open</a>`)
   }
   map.on('popupopen', e => {
