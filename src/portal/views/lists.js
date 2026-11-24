@@ -13,7 +13,17 @@ export function lists(el) {
   const cols = [
     { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<b>${esc(p.address)}</b><span>${esc(p.zip)}</span>` },
     { key: 'owner', label: t('c.owner'), render: p => esc(p.owners?.[0]?.name || 'n/a') },
-    { key: 'phone', label: t('c.phone'), render: p => { const ph = (p.contacts || []).filter(c => c.kind === 'phone'); return ph.length ? ph.map(c => `<span class="mono" style="${c.dnc || isDnc(c.value) ? 'text-decoration:line-through;color:var(--dim)' : ''}">${esc(c.value)}</span>`).join('<br/>') : '<span class="dim">n/a</span>' } },
+    { key: 'phone', label: t('c.phone'), render: p => {
+      const ph = (p.contacts || []).filter(c => c.kind === 'phone')
+      if (!ph.length) return '<span class="dim">n/a</span>'
+      // Best numbers first: callable (not DNC), then mobile, then confidence. Show 2; the rest are in the property.
+      const ok = c => !(c.dnc || isDnc(c.value))
+      const best = ph.slice().sort((a, b) => (ok(b) - ok(a)) || ((b.phoneType === 'mobile') - (a.phoneType === 'mobile')) || ((b.confidence || 0) - (a.confidence || 0)))
+      const fmt = v => { const d = String(v).replace(/\D/g, '').slice(-10); return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : v }
+      const show = best.filter(ok).slice(0, 2)
+      const rest = ph.length - show.length
+      return (show.length ? show.map(c => `<span class="mono">${esc(fmt(c.value))}</span>${c.phoneType === 'mobile' ? ' <small class="dim">cel</small>' : ''}`).join('<br/>') : `<span class="dim">${esc(t('ph.all_dnc'))}</span>`) + (rest > 0 ? `<br/><small class="dim">+${rest} ${esc(t('ph.more'))}</small>` : '')
+    } },
     { key: 'sale', label: t('c.sale'), render: p => p.foreclosure ? `<span class="mono">${esc(date(p.foreclosure.saleDate))}</span>` : '<span class="dim">n/a</span>' },
     { key: 'equity', label: t('c.equity'), num: true, render: p => money(p._d.equity, true) },
     { key: 'score', label: t('c.score'), num: true, render: p => scorePill(p._score) },
@@ -46,7 +56,6 @@ export function lists(el) {
           <button class="btn" data-a="reiskip">${icon('download')}${esc(t('lists.export_reiskip'))}</button>
           <button class="btn" data-a="ghl">${icon('download')}${esc(t('lists.export_ghl'))}</button>
           <button class="btn" data-a="generic">${icon('download')}${esc(t('lists.export_generic'))}</button>
-          <button class="btn" data-a="crm">${esc(t('sel.crm'))}</button>
           <button class="btn ghost" data-a="dedupe">${esc(t('lists.dedupe'))}</button>
           <button class="btn ghost" data-a="select">${esc(t('sel.all'))}</button>
           <span class="sp"></span>

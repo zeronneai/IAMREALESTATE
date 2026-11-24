@@ -71,7 +71,9 @@ async function tracerfy(recs) {
     if (r.status === 401 || r.status === 403) throw new Error('tracerfy key rejected')
     if (r.status === 402) throw new Error('tracerfy has no credits left')
     if (!r.ok || !j.hit) return { id: rec.id, phones: [], emails: [], deceased: false, owner: null }
-    const people = (j.persons || []).slice().sort((a, b) => (b.property_owner ? 1 : 0) - (a.property_owner ? 1 : 0))
+    // Only the owners (relatives and other household members are skipped), best numbers first.
+    const all = j.persons || [], owners = all.filter(p => p.property_owner)
+    const people = owners.length ? owners : all.slice(0, 1)
     const phones = [], emails = [], seen = new Set()
     for (const p of people) {
       const who = [p.first_name, p.last_name].filter(Boolean).join(' ')
@@ -82,7 +84,8 @@ async function tracerfy(recs) {
       for (const e of p.emails || []) if (e.email && !emails.includes(e.email)) emails.push(e.email)
     }
     const o = people[0]
-    return { id: rec.id, phones, emails, deceased: !!(o && o.deceased), owner: o ? [o.first_name, o.last_name].filter(Boolean).join(' ') : null, credits: j.credits_deducted || 0 }
+    phones.splice(5)
+    return { id: rec.id, phones, emails: emails.slice(0, 3), deceased: !!(o && o.deceased), owner: o ? [o.first_name, o.last_name].filter(Boolean).join(' ') : null, credits: j.credits_deducted || 0 }
   }
   const out = []
   for (let i = 0; i < recs.length; i += 4) out.push(...await Promise.all(recs.slice(i, i + 4).map(one)))

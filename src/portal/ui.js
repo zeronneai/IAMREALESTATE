@@ -71,6 +71,19 @@ export function modal(html, onMount, opts = {}) {
   return close
 }
 
+// In-app confirmation (instead of the browser's "site says" popup). Resolves true or false.
+export function confirmBox(text, okLabel) {
+  return new Promise(res => {
+    let done = false
+    const close = modal(`<p style="margin:0 0 16px;font-size:15px;line-height:1.5">${esc(text)}</p><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost" data-no>${esc(t('cancel'))}</button><button class="btn gold" data-yes>${esc(okLabel || 'OK')}</button></div>`, (box, close) => {
+      box.querySelector('[data-yes]').onclick = () => { done = true; close(); res(true) }
+      box.querySelector('[data-no]').onclick = () => { done = true; close(); res(false) }
+    })
+    const obs = new MutationObserver(() => { if (!done && !document.body.contains(document.querySelector('.modal [data-yes]'))) { done = true; obs.disconnect(); res(false) } })
+    obs.observe(document.body, { childList: true })
+  })
+}
+
 // ---------- selection + batch bar (shared across views) ----------
 export const selection = new Set()
 export const routeIds = []
@@ -164,7 +177,7 @@ export async function skipTrace(ids) {
   // Do not pay twice: in a batch, skip properties that already have a phone.
   if (ps.length > 1) ps = ps.filter(p => !(p.contacts || []).some(c => c.kind === 'phone'))
   if (!ps.length) return toast(t('toast.skip_none'))
-  if (S.MODE !== 'demo' && !window.confirm(t('skip.confirm').replace('{n}', ps.length).replace('{usd}', (ps.length * 0.10).toFixed(2)))) return
+  if (S.MODE !== 'demo' && !(await confirmBox(t('skip.confirm').replace('{n}', ps.length).replace('{usd}', (ps.length * 0.10).toFixed(2)), t('skip.go')))) return
   let res = { ok: true, data: { results: [] } }
   for (let i = 0; i < ps.length; i += 40) {
     const part = await api('/api/skiptrace', { records: ps.slice(i, i + 40).map(p => ({ id: p.id, owner: p.owners?.[0]?.name || '', address: p.address, city: p.city, state: p.state, zip: p.zip })) }).catch(() => ({ status: 0 }))

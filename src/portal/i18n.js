@@ -695,6 +695,7 @@ const D = {
   'al.demo_sum': ['Good morning team. This is the demo, so this summary is an example.\n- **2 late rents** for $1,450 each: call before noon.\n- **Trustee sale Dec 1** with 16 properties.\n- **1 text** waiting for an answer.\nStart with the late rents.', 'Buenos días equipo. Esto es el demo, así que este resumen es un ejemplo.\n- **2 rentas atrasadas** de $1,450 cada una: llamar antes del mediodía.\n- **Remate el 1 de dic** con 16 propiedades.\n- **1 mensaje** sin contestar.\nEmpiecen por las rentas atrasadas.'],
   'skip.confirm': ['Look up owner phones for {n} properties? About ${usd} in skip trace credits (only charged when a match is found).', '¿Buscar teléfonos de los dueños de {n} propiedades? Cuesta unos ${usd} en créditos de skip trace (solo se cobra si encuentra).'],
   'toast.skip_none': ['These properties already have phones.', 'Estas propiedades ya tienen teléfonos.'],
+  'skip.go': ['Look up phones', 'Buscar teléfonos'], 'ph.more': ['more in the property', 'más en la propiedad'], 'ph.all_dnc': ['Only do-not-call numbers', 'Solo números de no llamar'],
   'jv.v_pick': ['Jarvis voice', 'Voz de Jarvis'], 'jv.v_agent': ['Same as the AI phone agent', 'La misma del agente de voz'], 'jv.v_browser': ['Basic browser voice (free)', 'Voz básica del navegador (gratis)'],
   'jv.v_sample': ['Hi, I am Jarvis. This is how I sound.', 'Hola, soy Jarvis. Así sueno.'],
   'jv.mic': ['Talk to Jarvis', 'Háblale a Jarvis'], 'jv.listening': ['Listening... tap to stop', 'Escuchando... toca para parar'],
