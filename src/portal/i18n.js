@@ -713,6 +713,7 @@ const D = {
   'fc.saving': ['Saving homes and lists...', 'Guardando casas y listas...'],
   'fc.phones': ['Looking up owner phones...', 'Buscando teléfonos de los dueños...'],
   'fc.done': ['Done: {n} foreclosures ({a} new), phones found for {p}.', 'Listo: {n} remates ({a} nuevos), teléfonos encontrados para {p}.'],
+  'fc.auto': ['Phones found automatically for {n} foreclosures', 'Se encontraron teléfonos en automático para {n} remates'],
   'al.county_new': ['Bring the county foreclosure list for the sale of', 'Trae la lista de remates del condado para la venta del'],
   'al.county_upd': ['The notice deadline passed: update the county list for the sale of', 'Ya cerró el plazo de avisos: actualiza la lista del condado para la venta del'],
   'skip.go': ['Look up phones', 'Buscar teléfonos'], 'ph.more': ['more in the property', 'más en la propiedad'], 'ph.all_dnc': ['Only do-not-call numbers', 'Solo números de no llamar'],

@@ -291,6 +291,15 @@ export async function saveInventory(item) {
   }
   persist(); emit(); return item
 }
+// Save map coordinates for several homes at once (one repaint, not one per home).
+export async function setInventoryGeo(pairs) {
+  for (const { id, lat, lng } of pairs) {
+    const v = db.inventory.find(x => x.id === id); if (!v) continue
+    v.listing = { ...(v.listing || {}), geo: { lat, lng } }
+    if (sb && isUuid(id)) await sb.from('inventory').update({ listing: v.listing }).eq('id', id)
+  }
+  if (pairs.length) { persist(); emit() }
+}
 export async function addStatement(invId, st) {
   const v = db.inventory.find(x => x.id === invId); if (!v) return
   st.id = uid('st')

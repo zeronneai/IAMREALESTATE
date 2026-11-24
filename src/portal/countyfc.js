@@ -107,3 +107,21 @@ export async function runCountyImport(data, onStep) {
     return { ...res, total: rows.length, phones: found || 0 }
   } finally { running = false }
 }
+
+// Automatic phones for upcoming foreclosures that have none yet (for example homes loaded by SQL).
+// Runs once per session, tries each home only once per browser, and never repeats a home already looked up.
+const TRIED_KEY = 'iam_auto_trace_v1'
+let autoDone = false
+export async function autoTraceForeclosures() {
+  if (autoDone || S.MODE === 'demo' || !['admin', 'agent'].includes(S.role())) return
+  autoDone = true
+  let tried = {}; try { tried = JSON.parse(localStorage.getItem(TRIED_KEY)) || {} } catch { /* none */ }
+  const today = new Date().toISOString().slice(0, 10)
+  const ids = S.parcels().filter(p => p.foreclosure?.saleDate >= today && !tried[p.id]
+    && !(p.contacts || []).some(c => c.kind === 'phone') && !(p.activities || []).some(a => a.kind === 'skiptrace')).map(p => p.id)
+  if (!ids.length) return
+  ids.forEach(id => { tried[id] = today })
+  try { localStorage.setItem(TRIED_KEY, JSON.stringify(tried)) } catch { /* private mode */ }
+  const n = await skipTrace(ids, { quiet: true }).catch(() => 0)
+  if (n) toast(t('fc.auto').replace('{n}', n))
+}

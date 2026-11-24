@@ -22,7 +22,7 @@ import { inventoryView } from './views/inventory.js'
 import { mortgages } from './views/mortgages.js'
 import { importer } from './views/importer.js'
 import { settingsView } from './views/settings.js'
-import { listenCounty } from './countyfc.js'
+import { listenCounty, autoTraceForeclosures } from './countyfc.js'
 import { routeView } from './views/route.js'
 
 const ROUTES = {
@@ -107,7 +107,7 @@ function shell() {
   </div>`
   $('[data-acct]').onclick = e => acctMenu(e.currentTarget)
   $('[data-install]')?.addEventListener('click', installApp)
-  mountBell(); listenCounty()
+  mountBell(); listenCounty(); setTimeout(autoTraceForeclosures, 4000)
   $$('[data-lang]').forEach(b => b.onclick = () => setLang(b.dataset.lang))
   $('[data-theme]')?.addEventListener('click', () => { const dark = !document.documentElement.classList.contains('dark'); document.documentElement.classList.toggle('dark', dark); try { localStorage.setItem('iam_theme', dark ? 'dark' : 'light') } catch {} ; shell(); route() })
   $('[data-burger]').onclick = () => $('#side').classList.toggle('open')

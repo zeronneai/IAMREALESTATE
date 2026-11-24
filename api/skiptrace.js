@@ -7,9 +7,10 @@ export const config = { maxDuration: 60 }
 export default async function handler(req, res) {
   if (!only(req, res)) return
   if (!(await guard(req, res))) return
-  const recs = Array.isArray(body(req).records) ? body(req).records.slice(0, 250) : []
-  if (!recs.length) return res.status(400).json({ error: 'no_records' })
-  for (const r of recs) if (!r.id || !r.address || !r.zip) return res.status(400).json({ error: 'invalid_record', id: r.id || null })
+  // Records without an address, or without both zip and city, are skipped (not the whole batch).
+  const all = Array.isArray(body(req).records) ? body(req).records.slice(0, 250) : []
+  const recs = all.filter(r => r && r.id && r.address && (r.zip || r.city))
+  if (!recs.length) return res.status(400).json({ error: all.length ? 'invalid_records' : 'no_records' })
 
   const provider = (process.env.SKIPTRACE_PROVIDER || (process.env.TRACERFY_API_KEY ? 'tracerfy' : '')).toLowerCase()
   try {
