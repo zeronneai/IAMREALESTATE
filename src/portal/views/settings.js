@@ -95,6 +95,11 @@ export async function settingsView(el) {
     <div style="display:grid;gap:24px;align-content:start">
       <div class="card fade-in"><h3>${esc(t('acct.title'))}</h3>
         <div class="member" style="border:0;padding-top:0"><span class="av">${esc(initials(S.userEmail()))}</span><div class="who"><b>${esc(S.userEmail())}</b><small>${esc(t('role.' + (S.role() || 'viewer')))}</small></div></div>
+        <form data-myphone style="display:grid;gap:10px;margin-bottom:16px">
+          <div class="f"><label for="myph">${esc(t('call.my_phone'))}</label><input id="myph" name="phone" type="tel" placeholder="(915) 555-0123" autocomplete="tel" /></div>
+          <label class="chk" style="font-size:13px"><input type="checkbox" name="jc" checked> ${esc(t('call.my_auto'))}</label>
+          <div style="display:flex;gap:8px;align-items:center"><span class="muted" style="font-size:12.5px">${esc(t('call.my_hint'))}</span><button type="button" class="btn ghost" data-testcall style="margin-left:auto">${esc(t('call.me'))}</button><button class="btn">${esc(t('s.save'))}</button></div>
+        </form>
         <form data-pw style="display:grid;gap:12px">
           <div class="form-grid">
             <div class="f"><label for="pw1">${esc(t('acct.new_pw'))}</label><input id="pw1" type="password" name="p1" minlength="8" required autocomplete="new-password" /></div>
@@ -147,6 +152,13 @@ export async function settingsView(el) {
   }
   el.querySelector('[data-mreset]').onclick = async () => { await S.saveSettings({ mailSender: null, mailTemplates: null }); settingsView(el) }
   // own password
+  const myf = el.querySelector('[data-myphone]')
+  import('../calls.js').then(async C => {
+    const me = await C.myCallSettings()
+    if (me.ok && myf.isConnected) { myf.phone.value = me.phone || ''; myf.jc.checked = me.jarvis_call !== false }
+    myf.onsubmit = async e => { e.preventDefault(); const r = await C.saveMyPhone(myf.phone.value.trim(), myf.jc.checked); toast(r.ok ? t('call.saved') : t('call.e_bad_number')) }
+    myf.querySelector('[data-testcall]').onclick = async () => { if (myf.phone.value.trim()) await C.saveMyPhone(myf.phone.value.trim(), myf.jc.checked); C.callMe('They pressed "Call me" in Settings to test the call.') }
+  })
   el.querySelector('[data-pw]').onsubmit = async e => {
     e.preventDefault(); const { p1, p2 } = Object.fromEntries(new FormData(e.target))
     if (p1 !== p2) return toast(t('acct.pw_mismatch'))

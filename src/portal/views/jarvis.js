@@ -141,6 +141,7 @@ export function jarvisView(el) {
       <label class="chk" style="font-size:13px"><input type="checkbox" data-ctx ${st.ctx ? 'checked' : ''}> ${esc(t('jv.ctx'))}</label>
       ${canSpeak ? `<label class="chk jv-voice"><input type="checkbox" data-voice ${st.voice ? 'checked' : ''}> ${esc(t('jv.voice'))}</label>
       <div class="f jv-vpick"><label>${esc(t('jv.v_pick'))}</label><select data-vsel><option value="">${esc(t('jv.v_agent'))}</option><option value="browser">${esc(t('jv.v_browser'))}</option></select></div>` : ''}
+      <button class="btn ghost" data-callme style="width:100%">${esc(t('call.me'))}</button>
       <small class="dim">${esc(t('jv.private'))}</small>
     </aside>
     <section class="jv-main card">
@@ -158,6 +159,7 @@ export function jarvisView(el) {
   const vsel = el.querySelector('[data-vsel]')
   if (vsel) { paintVoices(el); loadVoices(el); vsel.onchange = () => { st.voiceId = vsel.value; save(st); speak(t('jv.v_sample')) } }
   el.querySelector('[data-mic]').onclick = () => toggleMic(el)
+  el.querySelector('[data-callme]').onclick = e => { e.currentTarget.disabled = true; import('../calls.js').then(m => m.callMe('They pressed "Call me" in Jarvis to talk about what is pending.')) }
   el.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { if (audio || (canSpeak && speechSynthesis.speaking)) { stopTalk(); return } speak(chat.msgs[+b.dataset.say].content) })
   el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => ask(el, b.dataset.q))
   const ta = el.querySelector('[data-in]'), f = el.querySelector('[data-f]')

@@ -32,6 +32,9 @@
     },
     "api/outreach/inbound.js": {
       "maxDuration": 30
+    },
+    "api/voice/agent.js": {
+      "maxDuration": 30
     }
   },
   "crons": [
@@ -46,6 +49,10 @@
     {
       "path": "/api/cron/sequences",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/jarvis",
+      "schedule": "0 15 * * 1-6"
     }
   ]
 }
