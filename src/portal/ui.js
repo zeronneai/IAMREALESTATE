@@ -160,8 +160,17 @@ async function copyRows(ids) {
 
 const FAKE_SUFFIX = () => String(Math.floor(Math.random() * 100)).padStart(2, '0')
 export async function skipTrace(ids) {
-  const ps = ids.map(S.parcel).filter(Boolean)
-  const res = await api('/api/skiptrace', { records: ps.map(p => ({ id: p.id, owner: p.owners?.[0]?.name || '', address: p.address, city: p.city, state: p.state, zip: p.zip })) }).catch(() => ({ status: 0 }))
+  let ps = ids.map(S.parcel).filter(Boolean)
+  // Do not pay twice: in a batch, skip properties that already have a phone.
+  if (ps.length > 1) ps = ps.filter(p => !(p.contacts || []).some(c => c.kind === 'phone'))
+  if (!ps.length) return toast(t('toast.skip_none'))
+  if (S.MODE !== 'demo' && !window.confirm(t('skip.confirm').replace('{n}', ps.length).replace('{usd}', (ps.length * 0.10).toFixed(2)))) return
+  let res = { ok: true, data: { results: [] } }
+  for (let i = 0; i < ps.length; i += 40) {
+    const part = await api('/api/skiptrace', { records: ps.slice(i, i + 40).map(p => ({ id: p.id, owner: p.owners?.[0]?.name || '', address: p.address, city: p.city, state: p.state, zip: p.zip })) }).catch(() => ({ status: 0 }))
+    if (!part.ok) { res = part; break }
+    res.data.provider = part.data.provider; res.data.results.push(...(part.data.results || []))
+  }
   if (res.ok && Array.isArray(res.data.results)) {
     for (const r of res.data.results) {
       const contacts = [...(r.phones || []).map(ph => ({ kind: 'phone', value: ph.number, phoneType: ph.type, dnc: !!ph.dnc || isDnc(ph.number), litigator: !!ph.litigator, confidence: ph.score, provider: res.data.provider })), ...(r.emails || []).map(em => ({ kind: 'email', value: em, provider: res.data.provider }))]

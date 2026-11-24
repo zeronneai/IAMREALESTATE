@@ -1,5 +1,5 @@
 // POST /api/skiptrace  { records: [{ id, owner, address, city, state, zip, mailing_address? }] }
-// Provider chosen by SKIPTRACE_PROVIDER = batchdata | reiskip. Without keys returns 501 (portal falls back to demo data).
+// Provider chosen by SKIPTRACE_PROVIDER = tracerfy | batchdata | reiskip (tracerfy is used automatically when TRACERFY_API_KEY is set). Without keys returns 501 (portal falls back to demo data).
 import { body, only, guard, notConfigured } from './_lib/util.js'
 
 export const config = { maxDuration: 60 }
@@ -11,8 +11,9 @@ export default async function handler(req, res) {
   if (!recs.length) return res.status(400).json({ error: 'no_records' })
   for (const r of recs) if (!r.id || !r.address || !r.zip) return res.status(400).json({ error: 'invalid_record', id: r.id || null })
 
-  const provider = (process.env.SKIPTRACE_PROVIDER || '').toLowerCase()
+  const provider = (process.env.SKIPTRACE_PROVIDER || (process.env.TRACERFY_API_KEY ? 'tracerfy' : '')).toLowerCase()
   try {
+    if (provider === 'tracerfy' && process.env.TRACERFY_API_KEY) return res.status(200).json({ provider, results: await tracerfy(recs.slice(0, 40)) })
     if (provider === 'batchdata' && process.env.BATCHDATA_API_KEY) return res.status(200).json({ provider, results: await batchdata(recs) })
     if (provider === 'reiskip' && process.env.REISKIP_API_KEY) return res.status(200).json({ provider, results: await reiskip(recs) })
   } catch (e) {
@@ -55,4 +56,35 @@ async function reiskip(recs) {
   const j = await r.json()
   if (!r.ok) throw new Error(`reiskip ${r.status}`)
   return (j.results || []).map(x => ({ id: x.id, phones: x.phones || [], emails: x.emails || [], deceased: !!x.deceased }))
+}
+
+// Tracerfy instant lookup: one call per address, owner found from the address alone.
+// 5 credits (about $0.10) per hit, nothing on a miss. Phones come ranked best first, with type and DNC flag.
+async function tracerfy(recs) {
+  const one = async rec => {
+    const r = await fetch(process.env.TRACERFY_LOOKUP_URL || 'https://tracerfy.com/v1/api/trace/lookup/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${process.env.TRACERFY_API_KEY}` },
+      body: JSON.stringify({ address: rec.address, city: rec.city || 'El Paso', state: rec.state || 'TX', zip: rec.zip }),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (r.status === 401 || r.status === 403) throw new Error('tracerfy key rejected')
+    if (r.status === 402) throw new Error('tracerfy has no credits left')
+    if (!r.ok || !j.hit) return { id: rec.id, phones: [], emails: [], deceased: false, owner: null }
+    const people = (j.persons || []).slice().sort((a, b) => (b.property_owner ? 1 : 0) - (a.property_owner ? 1 : 0))
+    const phones = [], emails = [], seen = new Set()
+    for (const p of people) {
+      const who = [p.first_name, p.last_name].filter(Boolean).join(' ')
+      for (const n of (p.phones || []).sort((a, b) => (a.rank || 99) - (b.rank || 99))) {
+        const num = String(n.number || '').replace(/\D/g, ''); if (!num || seen.has(num)) continue; seen.add(num)
+        phones.push({ number: num, type: (n.type || '').toLowerCase(), dnc: !!n.dnc, litigator: !!(n.litigator || n.tcpa), score: n.rank ? Math.max(10, 100 - (n.rank - 1) * 15) : null, name: who, owner: !!p.property_owner })
+      }
+      for (const e of p.emails || []) if (e.email && !emails.includes(e.email)) emails.push(e.email)
+    }
+    const o = people[0]
+    return { id: rec.id, phones, emails, deceased: !!(o && o.deceased), owner: o ? [o.first_name, o.last_name].filter(Boolean).join(' ') : null, credits: j.credits_deducted || 0 }
+  }
+  const out = []
+  for (let i = 0; i < recs.length; i += 4) out.push(...await Promise.all(recs.slice(i, i + 4).map(one)))
+  return out
 }
