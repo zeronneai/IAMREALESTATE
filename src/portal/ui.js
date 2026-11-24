@@ -172,12 +172,13 @@ async function copyRows(ids) {
 }
 
 const FAKE_SUFFIX = () => String(Math.floor(Math.random() * 100)).padStart(2, '0')
-export async function skipTrace(ids) {
+// Runs without asking (I AM asked for it automatic). Never pays twice: in a batch it skips properties that
+// already have a phone or were already looked up. { quiet } hides the toasts (automatic runs after an import).
+export async function skipTrace(ids, { quiet = false } = {}) {
   let ps = ids.map(S.parcel).filter(Boolean)
-  // Do not pay twice: in a batch, skip properties that already have a phone.
-  if (ps.length > 1) ps = ps.filter(p => !(p.contacts || []).some(c => c.kind === 'phone'))
-  if (!ps.length) return toast(t('toast.skip_none'))
-  if (S.MODE !== 'demo' && !(await confirmBox(t('skip.confirm').replace('{n}', ps.length).replace('{usd}', (ps.length * 0.10).toFixed(2)), t('skip.go')))) return
+  if (ps.length > 1) ps = ps.filter(p => !(p.contacts || []).some(c => c.kind === 'phone') && !(p.activities || []).some(a => a.kind === 'skiptrace'))
+  if (!ps.length) return quiet ? 0 : toast(t('toast.skip_none'))
+  const toastQ = m => quiet ? null : toast(m)
   let res = { ok: true, data: { results: [] } }
   for (let i = 0; i < ps.length; i += 40) {
     const part = await api('/api/skiptrace', { records: ps.slice(i, i + 40).map(p => ({ id: p.id, owner: p.owners?.[0]?.name || '', address: p.address, city: p.city, state: p.state, zip: p.zip })) }).catch(() => ({ status: 0 }))
@@ -190,9 +191,9 @@ export async function skipTrace(ids) {
       await S.addContacts(r.id, contacts)
       await S.addActivity(r.id, 'skiptrace', `Skip trace (${res.data.provider}): ${contacts.length} contacts`)
     }
-    return toast(t('toast.skip_ok'))
+    toastQ(t('toast.skip_ok')); return res.data.results.length
   }
-  if (S.MODE !== 'demo' && (res.status === 501 || res.status === 404)) return toast(t('toast.skip_off'))
+  if (S.MODE !== 'demo' && (res.status === 501 || res.status === 404)) return toastQ(t('toast.skip_off'))
   if (S.MODE === 'demo') {
     for (const p of ps) {
       const n = Math.random() < 0.8 ? 2 : 1
@@ -201,9 +202,9 @@ export async function skipTrace(ids) {
       await S.addContacts(p.id, contacts)
       await S.addActivity(p.id, 'skiptrace', 'Demo skip trace: fictional contacts')
     }
-    return toast(t('toast.skip_demo'))
+    toastQ(t('toast.skip_demo')); return ps.length
   }
-  toast(t('toast.err'))
+  toastQ(t('toast.err'))
 }
 export async function pushCRM(ids) {
   const ps = ids.map(S.parcel).filter(Boolean)

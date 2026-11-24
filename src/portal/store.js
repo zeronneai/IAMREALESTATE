@@ -310,16 +310,23 @@ export async function markPaid(invId, stId) {
 export async function importParcels(rows, { tag, source }) {
   let added = 0, updated = 0
   const byAddr = new Map(db.parcels.map(p => [normAddr(p.address) + '|' + (p.zip || ''), p]))
+  const byEp = new Map(db.parcels.filter(p => p.epcadId).map(p => [String(p.epcadId), p]))
+  const ids = []
   for (const row of rows) {
     const k = normAddr(row.address) + '|' + (row.zip || '')
-    const ex = byAddr.get(k) || (row.zip ? null : db.parcels.find(p => normAddr(p.address) === normAddr(row.address)))
+    const ex = (row.epcadId && byEp.get(String(row.epcadId))) || byAddr.get(k) || (row.zip ? null : db.parcels.find(p => normAddr(p.address) === normAddr(row.address)))
     if (ex) {
       for (const f of ['marketValue', 'yearBuilt', 'sqft', 'beds', 'baths', 'lastDeedDate', 'legal', 'epcadId', 'lot']) if (row[f] != null && row[f] !== '') ex[f] = row[f]
       if (row.owners?.length && !ex.owners?.length) ex.owners = row.owners
-      if (row.foreclosure) ex.foreclosure = { ...(ex.foreclosure || {}), ...row.foreclosure }
+      if (row.foreclosure) {
+        // A new sale date for a home we already have (postponed or reposted): record it as its own foreclosure row.
+        const isNew = !ex.foreclosure || ex.foreclosure.saleDate !== row.foreclosure.saleDate
+        ex.foreclosure = isNew ? { ...row.foreclosure } : { ...ex.foreclosure, ...row.foreclosure }
+        if (isNew && sb && isUuid(ex.id)) { const f = row.foreclosure; await sb.from('foreclosures').insert({ parcel_id: ex.id, sale_date: f.saleDate, sale_location: f.saleLocation || null, source_url: f.sourceUrl || null }) }
+      }
       if (row.contacts?.length) { const have = new Set((ex.contacts || []).map(c => c.value)); ex.contacts = [...(ex.contacts || []), ...row.contacts.filter(c => !have.has(c.value))] }
       if (tag) ex.tags = [...new Set([...(ex.tags || []), tag])]
-      enrich(ex); updated++
+      enrich(ex); updated++; ids.push(ex.id)
       if (sb) await sbUpsertParcel(ex)
       continue
     }
@@ -330,8 +337,10 @@ export async function importParcels(rows, { tag, source }) {
     p.activities = [{ id: uid('a'), kind: 'import', body: `Imported from ${source}`, at: new Date().toISOString(), by: userEmail() }]
     db.parcels.unshift(p); byAddr.set(k, p); added++
     if (sb) await sbUpsertParcel(p)
+    ids.push(p.id)
   }
-  return { added, updated }
+  persist(); emit()
+  return { added, updated, ids }
 }
 // Enrich existing parcels from an EPCAD export (match by property id or address). No new parcels created.
 export function enrichFromEpcad(rows) {
@@ -480,7 +489,7 @@ async function sbUpsertParcel(p) {
     }
     if (p.foreclosure) {
       const f = p.foreclosure
-      await sb.from('foreclosures').insert({ parcel_id: p.id, sale_date: f.saleDate, sale_time_window: f.saleWindow, sale_location: f.saleLocation, filing_date: f.filingDate || null, trustees: f.trustees || [], mortgagee: f.mortgagee, servicer: f.servicer, original_loan_amount: f.originalLoan, deed_of_trust_date: f.dotDate || null, est_loan_balance: f.estBalance, instrument_number: f.instrument, attorney_firm: f.attorney })
+      await sb.from('foreclosures').insert({ parcel_id: p.id, source_url: f.sourceUrl || null, sale_date: f.saleDate, sale_time_window: f.saleWindow, sale_location: f.saleLocation, filing_date: f.filingDate || null, trustees: f.trustees || [], mortgagee: f.mortgagee, servicer: f.servicer, original_loan_amount: f.originalLoan, deed_of_trust_date: f.dotDate || null, est_loan_balance: f.estBalance, instrument_number: f.instrument, attorney_firm: f.attorney })
     }
   }
 }

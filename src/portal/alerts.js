@@ -4,6 +4,8 @@
 import { t, getLang } from './i18n.js'
 import * as S from './store.js'
 import { esc, money, date } from './ui.js'
+import { firstTuesdays } from './score.js'
+import { lastImport } from './countyfc.js'
 
 const SEEN_KEY = 'iam_alerts_seen_v1', SUM_KEY = 'iam_alerts_summary_v1'
 const load = k => { try { return JSON.parse(localStorage.getItem(k)) || {} } catch { return {} } }
@@ -42,6 +44,15 @@ export function computeAlerts() {
       add(`auc:${p.id}:${p.foreclosure.saleDate}`, 'bad', 'deals', `${t('al.auction')} ${p._d.daysToSale} ${t('k.days')}: ${p.address} (${t('st.' + p.status)})`, `#/foreclosures?p=${encodeURIComponent(p.id)}`)
     const next = fcs.map(p => p.foreclosure.saleDate).sort()[0]
     if (next && days(next) <= 10) add(`sale:${next}`, 'info', 'deals', `${t('al.next_sale')} ${date(next)}: ${fcs.filter(p => p.foreclosure.saleDate === next).length} ${t('al.records')}`, '#/foreclosures')
+    // Reminder to bring the county foreclosure list (sale = first Tuesday; notices close 21 days before).
+    const sale = firstTuesdays(new Date(Date.now() + 86400e3), 1)[0]
+    if (sale && days(sale) <= 28) {
+      const have = S.parcels().some(p => p.foreclosure?.saleDate === sale)
+      const closed = new Date(new Date(sale + 'T12:00:00') - 21 * 86400e3).toISOString().slice(0, 10)
+      const last = lastImport().slice(0, 10)
+      if (!have) add(`county:${sale}:new`, 'warn', 'deals', `${t('al.county_new')} ${date(sale)}`, '#/import?county=go')
+      else if (todayStr() > closed && (!last || last <= closed)) add(`county:${sale}:upd`, 'info', 'deals', `${t('al.county_upd')} ${date(sale)}`, '#/import?county=go')
+    }
     // Open tasks that are due or overdue.
     for (const p of S.parcels()) for (const k of (p.tasks || []).filter(k => !k.done && k.due && days(k.due) <= 0))
       add(`task:${k.id}`, days(k.due) < 0 ? 'warn' : 'info', 'deals', `${t('al.task')}: ${k.title} · ${p.address}`, `#/properties?p=${encodeURIComponent(p.id)}`)

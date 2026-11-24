@@ -6,6 +6,7 @@ import { parseNotices, parseNotice } from '../parse/notice.js'
 import { parseTaxLines } from '../parse/table.js'
 import { normStreet } from '../parse/address.js'
 import * as EP from '../epcad.js'
+import { bookmarklet, openCountyMap, runCountyImport, lastImport } from '../countyfc.js'
 
 // Notices waiting for review: { file, fields, confidence, score, text, ocr }
 let pending = []
@@ -17,10 +18,21 @@ const DEMO = S.MODE === 'demo'
 const kindLabel = k => { const v = t('ik.' + k); return v === 'ik.' + k ? k : v }
 const head = (title, sub) => `<h3>${esc(title)}${sub ? `<span class="r muted" style="font-size:13px;font-weight:500">${esc(sub)}</span>` : ''}</h3>`
 
-export function importer(el) {
+export function importer(el, q = {}) {
   const adv = S.advanced()
+  const last = lastImport()
   el.innerHTML = `
   <div class="import-grid">
+    <div class="card fade-in" id="countyfc" style="grid-column:1/-1${q.county ? ';outline:2px solid var(--gold)' : ''}">${head(t('fc.title'), last ? t('fc.last') + ' ' + date(last) : '')}
+      <p class="lead">${esc(t('fc.lead'))}</p>
+      <ol class="fc-steps" style="margin:0 0 12px 18px;display:grid;gap:6px;font-size:14px">
+        <li>${esc(t('fc.s1'))}</li><li>${esc(t('fc.s2'))}</li><li>${esc(t('fc.s3'))}</li>
+      </ol>
+      <div class="toolbar"><button class="btn gold" data-fcopen>${esc(t('fc.open'))}</button>
+        <a class="btn ghost" href="${bookmarklet()}" data-fcbm draggable="true" title="${esc(t('fc.bm_tip'))}">${esc(t('fc.bm'))}</a>
+        <span class="muted" style="font-size:12.5px">${esc(t('fc.bm_hint'))}</span></div>
+      <div id="fcout" class="muted" style="margin-top:10px;font-size:13.5px"></div>
+    </div>
     <div class="card fade-in" style="grid-column:1/-1">${head(t('i.notices'), t('i.notices_sub'))}
       <p class="lead">${esc(t('i.notices_hint'))}</p>
       <div class="drop" id="ndrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('i.drop'))}</b></div><p>PDF · JPG · PNG</p></div>
@@ -65,6 +77,11 @@ export function importer(el) {
   dropzone($('#edrop', el), files => epcadFiles(files), { accept: '.csv,.txt,text/csv,text/plain' })
   dropzone($('#tdrop', el), files => taxFile(files[0]), { multiple: false, accept: 'application/pdf,.csv,text/csv' })
   dropzone($('#cdrop', el), files => csvFlow(files[0], 'list'), { multiple: false, accept: '.csv,text/csv' })
+  const fcout = el.querySelector('#fcout'), say = m => { if (fcout.isConnected) fcout.textContent = m }
+  el.querySelector('[data-fcopen]').onclick = () => { openCountyMap(); say(t('fc.waiting')) }
+  el.querySelector('[data-fcbm]').onclick = e => { e.preventDefault(); toast(t('fc.bm_drag')) }
+  if (q.county && q.county !== 'go') { const data = decodeURIComponent(q.county); history.replaceState(null, '', '#/import'); runCountyImport(data, say) }
+  else if (q.county === 'go') el.querySelector('#countyfc').scrollIntoView({ behavior: 'smooth', block: 'start' })
   el.querySelectorAll('[data-sample]').forEach(b => b.onclick = async () => notices([await sampleFile(b.dataset.sample)]))
   el.querySelector('[data-tsample]')?.addEventListener('click', async () => taxFile(await sampleFile('sample-tax-list.pdf')))
   epStatus()

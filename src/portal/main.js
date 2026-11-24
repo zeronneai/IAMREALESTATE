@@ -22,6 +22,7 @@ import { inventoryView } from './views/inventory.js'
 import { mortgages } from './views/mortgages.js'
 import { importer } from './views/importer.js'
 import { settingsView } from './views/settings.js'
+import { listenCounty } from './countyfc.js'
 import { routeView } from './views/route.js'
 
 const ROUTES = {
@@ -43,7 +44,7 @@ const ROUTES = {
   finance: { icon: 'mortgages', render: el => financeView(el), still: true, count: () => S.periodItems(S.monthStart()).filter(i => i.ob.dir === 'out' && (i.status === 'late' || i.status === 'due')).length || '' },
   mortgages: { icon: 'mortgages', render: el => mortgages(el) },
   route: { icon: 'route', render: el => routeView(el), still: true },
-  import: { icon: 'import', render: el => importer(el), still: true },
+  import: { icon: 'import', render: (el, q) => importer(el, q), still: true },
   settings: { icon: 'settings', render: el => settingsView(el), still: true },
 }
 const app = document.getElementById('app')
@@ -106,7 +107,7 @@ function shell() {
   </div>`
   $('[data-acct]').onclick = e => acctMenu(e.currentTarget)
   $('[data-install]')?.addEventListener('click', installApp)
-  mountBell()
+  mountBell(); listenCounty()
   $$('[data-lang]').forEach(b => b.onclick = () => setLang(b.dataset.lang))
   $('[data-theme]')?.addEventListener('click', () => { const dark = !document.documentElement.classList.contains('dark'); document.documentElement.classList.toggle('dark', dark); try { localStorage.setItem('iam_theme', dark ? 'dark' : 'light') } catch {} ; shell(); route() })
   $('[data-burger]').onclick = () => $('#side').classList.toggle('open')
