@@ -56,3 +56,26 @@ li as (
   returning parcel_id
 )
 select (select count(*) from p) as properties, (select count(*) from o) as owners_added, (select count(*) from l) as balances_added, (select count(*) from li) as in_list;
+
+-- Findings from public records (Nov 24, 2026): no back taxes on any of the 14; 2026 bill due Jan 31.
+with org as (select id from orgs where slug = 'iam'), f(prop_id, note, tags, tax) as (values
+  ('411582', 'Public records (Nov 24, 2026): [HOT] Owner Tomas Contreras has an Affidavit of Death on record (Jan 2023); title is a life estate. Notice of Trustee Sale in 2012 and loan modification in 2013. Taxes: no back taxes; 2026 bill $2,005.51 due Jan 31. Homestead + over 65.', array['probate']::text[], 2005.51),
+  ('57664', 'Public records (Nov 24, 2026): Loan from 2011 plus a second deed of trust in 2022. Two UCC financing statements (2015, 2021), usually solar or equipment. Taxes: no back taxes; 2026 bill $3,407.91 due Jan 31. Homestead; taxes paid through mortgage escrow.', array[]::text[], 3407.91),
+  ('303777', 'Public records (Nov 24, 2026): [HOT] NOTICE OF TRUSTEE SALE filed Nov 5, 2026: active foreclosure. Loan from 2020, assigned Oct 2026. Taxes: no back taxes; 2026 bill $3,922.04 due Jan 31. Homestead.', array['pre_foreclosure']::text[], 3922.04),
+  ('348881', 'Public records (Nov 24, 2026): Loan from 2017 plus a second deed of trust in 2024. Taxes: no back taxes; 2026 bill $5,168.27 due Jan 31. No homestead; taxes paid through mortgage escrow.', array[]::text[], 5168.27),
+  ('411176', 'Public records (Nov 24, 2026): [WATCH] Two deeds of trust from 2021 (first and second lien). Loan assigned Oct 2026, which often comes before a foreclosure notice. Taxes: no back taxes; 2026 bill $4,848.59 due Jan 31. No homestead.', array[]::text[], 4848.59),
+  ('637092', 'Public records (Nov 24, 2026): Two deeds of trust from 2014, another in 2024 and a subordination in 2026. Owner also bought in Tierra del Este in 2025. Taxes: no back taxes; 2026 bill $5,115.11 due Jan 31. Homestead; taxes paid through mortgage escrow.', array[]::text[], 5115.11),
+  ('627957', 'Public records (Nov 24, 2026): [CHECK] Owner holds several properties in Tierra del Este. A MEMORANDUM was recorded Sep 2026 (could be a contract with another buyer); confirm before reaching out. Taxes: no back taxes; 2026 bill $5,881.90 due Jan 31. No homestead.', array[]::text[], 5881.9),
+  ('317963', 'Public records (Nov 24, 2026): Owner is an investor with several properties; loan on this house since 2018. Taxes: no back taxes; 2026 bill $8,154.47 due Jan 31. No homestead (likely a rental).', array['absentee']::text[], 8154.47),
+  ('115978', 'Public records (Nov 24, 2026): Bought in 2002 with one loan; no new loans recorded. Taxes: no back taxes; 2026 bill $2,107.61 due Jan 31. Homestead + over 65.', array['high_equity']::text[], 2107.61),
+  ('336119', 'Public records (Nov 24, 2026): [HOT] APPOINTMENT OF SUBSTITUTE TRUSTEE filed Nov 13, 2026: foreclosure is starting. Several new deeds of trust 2024 to 2026. Old hospital lien (2011). Taxes: no back taxes; 2026 bill $2,716.77 due Jan 31. Homestead + over 65.', array['pre_foreclosure']::text[], 2716.77),
+  ('675169', 'Public records (Nov 24, 2026): [WATCH] Two deeds of trust from 2018, loan modifications in 2020 and 2025, another deed of trust in 2025: signs of payment trouble. Taxes: no back taxes; 2026 bill $5,219.55 due Jan 31. Homestead.', array[]::text[], 5219.55),
+  ('671887', 'Public records (Nov 24, 2026): Loan from 2018 plus two more deeds of trust in 2024. Owner bought another home in 2024, so this one is likely a rental. Taxes: no back taxes; 2026 bill $7,074.28 due Jan 31. No homestead.', array[]::text[], 7074.28),
+  ('629886', 'Public records (Nov 24, 2026): No recorded documents found under the owner''s name for this subdivision; needs a manual check. Taxes: no back taxes; 2026 bill $5,876.97 due Jan 31. Homestead; taxes paid through mortgage escrow.', array[]::text[], 5876.97),
+  ('118245', 'Public records (Nov 24, 2026): Two deeds of trust from 2019 and another in 2021; loan assigned Mar 2026. Taxes: no back taxes; 2026 bill $4,356.87 due Jan 31. Homestead.', array[]::text[], 4356.87)
+)
+update parcels p set
+  notes = case when coalesce(p.notes, '') like '%Public records (Nov 24, 2026)%' then p.notes else concat_ws(E'\n', p.notes, f.note) end,
+  tags = (select array(select distinct unnest(p.tags || f.tags))),
+  updated_at = now()
+from f, org where p.org_id = org.id and p.epcad_property_id = f.prop_id;
