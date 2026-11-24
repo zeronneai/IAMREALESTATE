@@ -10,6 +10,9 @@ export function lists(el) {
   if (!ls.find(l => l.id === active)) active = ls[0]?.id || null
   const l = ls.find(x => x.id === active)
   const rows = l ? l.ids.map(S.parcel).filter(Boolean) : []
+  // Only homes never looked up and without a phone still need the skip trace.
+  const needIds = rows.filter(p => !(p.contacts || []).some(c => c.kind === 'phone') && !(p.activities || []).some(a => a.kind === 'skiptrace')).map(p => p.id)
+  const needPhones = needIds.length
   const cols = [
     { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<b>${esc(p.address)}</b><span>${esc(p.zip)}</span>` },
     { key: 'owner', label: t('c.owner'), render: p => esc(p.owners?.[0]?.name || 'n/a') },
@@ -52,7 +55,7 @@ export function lists(el) {
         <div class="toolbar">
           <button class="btn gold" data-a="mail">${icon('mail')}${esc(t('sel.mail'))}</button>
           <button class="btn gold" data-a="route">${icon('route')}${esc(t('sel.route'))}</button>
-          <button class="btn" data-a="skip">${esc(t('sel.skip'))} (${rows.length})</button>
+          ${needPhones ? `<button class="btn" data-a="skip">${esc(t('sel.skip'))} (${needPhones})</button>` : ''}
           <button class="btn" data-a="reiskip">${icon('download')}${esc(t('lists.export_reiskip'))}</button>
           <button class="btn" data-a="ghl">${icon('download')}${esc(t('lists.export_ghl'))}</button>
           <button class="btn" data-a="generic">${icon('download')}${esc(t('lists.export_generic'))}</button>
@@ -71,7 +74,7 @@ export function lists(el) {
     const a = b.dataset.a, ids = l.ids
     if (a === 'mail') return import('./mailer.js').then(m => m.openMailer(ids))
     if (a === 'route') { routeIds.splice(0, routeIds.length, ...ids); location.hash = '#/route'; return }
-    if (a === 'skip') return skipTrace(ids)
+    if (a === 'skip') { b.disabled = true; b.textContent = t('sel.skip') + '...'; return skipTrace(needIds) }
     if (['reiskip', 'ghl', 'generic'].includes(a)) return exportCSV(ids, a)
     if (a === 'crm') return pushCRM(ids)
     if (a === 'select') { ids.forEach(id => selection.add(id)); selChanged(); return lists(el) }

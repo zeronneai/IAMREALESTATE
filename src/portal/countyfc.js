@@ -89,7 +89,7 @@ export async function runCountyImport(data, onStep) {
       }
     })
     step(t('fc.saving'))
-    const res = await S.importParcels(rows.map(({ _sale, ...x }) => x), { tag: 'foreclosure', source: 'county_map' })
+    const res = await S.quietly(() => S.importParcels(rows.map(({ _sale, ...x }) => x), { tag: 'foreclosure', source: 'county_map' }))
     // One list per sale date.
     const bySale = new Map()
     rows.forEach((r, k) => { const id = res.ids[k]; if (!id) return; if (!bySale.has(r._sale)) bySale.set(r._sale, []); bySale.get(r._sale).push(id) })

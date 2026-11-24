@@ -17,7 +17,13 @@ let sb = null
 let session = null
 const subs = new Set()
 export const onChange = f => { subs.add(f); return () => subs.delete(f) }
-const emit = () => subs.forEach(f => f())
+// During bulk work (skip trace of 80 homes, imports) hold repaints and paint once at the end.
+let hold = 0, missed = false
+const emit = () => { if (hold) { missed = true; return } subs.forEach(f => f()) }
+export async function quietly(fn) {
+  hold++
+  try { return await fn() } finally { hold--; if (!hold && missed) { missed = false; emit() } }
+}
 const uid = p => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 
 export const weights = () => ({ ...DEFAULT_WEIGHTS, ...(db?.settings?.weights || {}) })

@@ -186,11 +186,11 @@ export async function skipTrace(ids, { quiet = false } = {}) {
     res.data.provider = part.data.provider; res.data.results.push(...(part.data.results || []))
   }
   if (res.ok && Array.isArray(res.data.results)) {
-    for (const r of res.data.results) {
+    await S.quietly(async () => { for (const r of res.data.results) {
       const contacts = [...(r.phones || []).map(ph => ({ kind: 'phone', value: ph.number, phoneType: ph.type, dnc: !!ph.dnc || isDnc(ph.number), litigator: !!ph.litigator, confidence: ph.score, provider: res.data.provider })), ...(r.emails || []).map(em => ({ kind: 'email', value: em, provider: res.data.provider }))]
       await S.addContacts(r.id, contacts)
       await S.addActivity(r.id, 'skiptrace', `Skip trace (${res.data.provider}): ${contacts.length} contacts`)
-    }
+    } })
     toastQ(t('toast.skip_ok')); return res.data.results.length
   }
   if (S.MODE !== 'demo' && (res.status === 501 || res.status === 404)) return toastQ(t('toast.skip_off'))
