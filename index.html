@@ -371,7 +371,7 @@
               <label class="field"><span data-i18n="form.phone">Phone</span><input name="phone" type="tel" autocomplete="tel" required /></label>
               <label class="field"><span data-i18n="form.email">Email</span><input name="email" type="email" autocomplete="email" /></label>
             </div>
-            <label class="check"><input type="checkbox" name="consent" checked /> <span data-i18n="form.consent">I agree to be contacted by I AM Real Estate by phone, text or email.</span></label>
+            <label class="check sms-ok"><input type="checkbox" name="sms_consent" /> <span data-i18n-html="form.sms">I agree to receive text messages from I AM Real Estate.</span></label>
           </fieldset>
           <div class="offer-nav">
             <button type="button" class="btn btn-ghost" id="offerBack" hidden data-i18n="offer.back">Back</button>
@@ -442,6 +442,7 @@
                 <option value="commercial" data-i18n="jv.comm">Commercial / industrial</option>
               </select>
             </label>
+            <label class="check sms-ok"><input type="checkbox" name="sms_consent" /> <span data-i18n-html="form.sms">I agree to receive text messages from I AM Real Estate.</span></label>
             <button class="btn btn-gold" type="submit" data-i18n="jv.send">Request a deal review</button>
           </form>
         </div>
@@ -474,6 +475,7 @@
                 <label class="field"><span data-i18n="man.addr">Rental address</span><input name="address" /></label>
                 <label class="field"><span data-i18n="man.units">Units</span><input name="units" type="number" min="1" value="1" /></label>
               </div>
+              <label class="check sms-ok"><input type="checkbox" name="sms_consent" /> <span data-i18n-html="form.sms">I agree to receive text messages from I AM Real Estate.</span></label>
               <button class="btn btn-dark" type="submit" data-i18n="man.ownCta">Get a management proposal</button>
             </form>
           </div>
@@ -498,6 +500,7 @@
                   <select name="budget"><option>$900 to $1,200</option><option>$1,200 to $1,600</option><option>$1,600 to $2,200</option><option>$2,200+</option></select>
                 </label>
               </div>
+              <label class="check sms-ok"><input type="checkbox" name="sms_consent" /> <span data-i18n-html="form.sms">I agree to receive text messages from I AM Real Estate.</span></label>
               <button class="btn btn-dark" type="submit" data-i18n="man.tenCta">Start rental application</button>
             </form>
           </div>
@@ -563,6 +566,7 @@
           </select>
         </label>
         <label class="field"><span data-i18n="contact.msg">Message</span><textarea name="message" rows="3"></textarea></label>
+        <label class="check sms-ok"><input type="checkbox" name="sms_consent" /> <span data-i18n-html="form.sms">I agree to receive text messages from I AM Real Estate.</span></label>
         <button class="btn btn-gold" type="submit" data-i18n="contact.send">Send message</button>
       </form>
     </section>
@@ -575,15 +579,15 @@
         <p class="foot-tag" data-i18n="foot.tag">Buy · Sell · Invest · Manage · Rent</p>
       </div>
       <address>
-        1522 Montana Ave<br/>El Paso, TX 79902<br/>
+        3590 N Zaragoza Rd, Ste B103<br/>El Paso, TX 79938<br/>
         <span data-i18n="foot.hours">Mon to Fri · 9:00 am to 5:00 pm</span><br/>
         <a href="mailto:info@iamrealestate.co">info@iamrealestate.co</a>
       </address>
       <div class="foot-links">
         <a href="https://www.facebook.com/" rel="noopener" target="_blank">Facebook</a>
         <a href="https://www.instagram.com/" rel="noopener" target="_blank">Instagram</a>
-        <a href="#" data-i18n="foot.privacy">Privacy policy</a>
-        <a href="#" data-i18n="foot.terms">Terms</a>
+        <a href="/privacy" data-i18n="foot.privacy">Privacy policy</a>
+        <a href="/terms" data-i18n="foot.terms">Terms</a>
       </div>
       <div class="foot-links">
         <!-- TREC: link both to the brokerage's completed TREC forms (IABS 1-0 and CN 1-5) before launch -->

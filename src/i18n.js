@@ -254,6 +254,7 @@ export const dict = {
   'form.name': ['Full name', 'Nombre completo'],
   'form.phone': ['Phone', 'Teléfono'],
   'form.email': ['Email', 'Correo'],
+  'form.sms': ['Optional: I agree to receive text messages from I AM Real Estate about my inquiry, appointments and properties. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of purchase. See our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms</a>.', 'Opcional: acepto recibir mensajes de texto de I AM Real Estate sobre mi solicitud, citas y propiedades. La frecuencia varía. Pueden aplicar cargos por mensajes y datos. Responde STOP para dejar de recibirlos y HELP para ayuda. No es condición de compra. Consulta nuestra <a href="/privacy">Política de privacidad</a> y <a href="/terms">Términos</a>.'],
   'form.consent': ['I agree to be contacted by I AM Real Estate by phone, text or email.', 'Acepto que I AM Real Estate me contacte por teléfono, mensaje o correo.'],
   'form.sent': ['Thank you. Our team will contact you within one business day.', 'Gracias. Nuestro equipo te contactará en menos de un día hábil.'],
   'form.demo': ['Demo mode: lead captured locally. Connect the Google Sheet to receive it.', 'Modo demo: el lead se guardó localmente. Conecta la hoja de Google para recibirlo.'],
