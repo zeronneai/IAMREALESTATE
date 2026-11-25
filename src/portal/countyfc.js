@@ -5,6 +5,7 @@
 import { t, getLang } from './i18n.js'
 import * as S from './store.js'
 import { esc, toast, skipTrace } from './ui.js'
+import { opportunities } from './alerts.js'
 
 export const COUNTY_MAP = 'https://apps.epcountytx.gov/publicrecords/Foreclosures/Map'
 const COUNTY_ORIGIN = 'https://apps.epcountytx.gov'
@@ -102,7 +103,8 @@ export async function runCountyImport(data, onStep) {
     // Phones for the new ones, automatic (skips homes that already have phones or were looked up).
     step(t('fc.phones'))
     const found = await skipTrace(res.ids, { quiet: true }).catch(() => 0)
-    const msg = t('fc.done').replace('{n}', rows.length).replace('{a}', res.added).replace('{p}', found || 0)
+    const opp = await syncOpportunities()
+    const msg = t('fc.done').replace('{n}', rows.length).replace('{a}', res.added).replace('{p}', found || 0) + (opp ? ' ' + t('fc.opp').replace('{n}', opp) : '')
     step(msg); toast(msg)
     return { ...res, total: rows.length, phones: found || 0 }
   } finally { running = false }
@@ -124,4 +126,16 @@ export async function autoTraceForeclosures() {
   try { localStorage.setItem(TRIED_KEY, JSON.stringify(tried)) } catch { /* private mode */ }
   const n = await skipTrace(ids, { quiet: true }).catch(() => 0)
   if (n) toast(t('fc.auto').replace('{n}', n))
+}
+
+// Jarvis keeps a list of the best upcoming foreclosures ("Oportunidades de Jarvis"). New ones are added, never twice.
+export async function syncOpportunities() {
+  if (S.MODE === 'demo' || !['admin', 'agent'].includes(S.role())) return 0
+  const ids = opportunities().slice(0, 40).map(p => p.id)
+  if (!ids.length) return 0
+  const name = 'Oportunidades de Jarvis', l = S.lists().find(x => x.name === name)
+  const fresh = l ? ids.filter(id => !l.ids.includes(id)) : ids
+  if (!fresh.length) return 0
+  await S.quietly(() => l ? S.addToList(l.id, fresh) : S.createList(name, fresh))
+  return fresh.length
 }

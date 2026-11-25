@@ -77,10 +77,20 @@ export function computeAlerts() {
       else if (!L.price && !v.listPrice) add(`noprice:${v.id}`, 'info', 'homes', `${t('al.no_price')}: ${v.address}`, '#/inventory')
     }
   }
+  // Jarvis watching for opportunities: upcoming foreclosures nobody has worked yet, with good equity or a high score.
+  if (!finance) for (const p of opportunities().slice(0, 6)) {
+    add(`opp:${p.id}:${p.foreclosure.saleDate}`, p._d.daysToSale <= 7 ? 'warn' : 'info', 'deals', `${t('al.opp')}: ${p.address} · ${t('al.opp_eq')} ${Math.round(p._d.equityPct || 0)}% · ${t('al.opp_sale')} ${date(p.foreclosure.saleDate)}`, '#/lists')
+  }
   const rank = { bad: 0, warn: 1, info: 2 }
   return out.sort((a, b) => rank[a.sev] - rank[b.sev])
 }
 
+// Upcoming foreclosures still "new" (nobody contacted), with equity of 40% or more or a score of 60 or more, best first.
+export function opportunities() {
+  return S.parcels().filter(p => p.foreclosure && (p._d?.daysToSale ?? -1) >= 0 && (!p.status || p.status === 'new')
+    && ((p._d?.equityPct || 0) >= 40 || (p._score || 0) >= 60) && !(p.tags || []).includes('tax_delinquent_heavy'))
+    .sort((a, b) => (b._score || 0) - (a._score || 0) || (b._d.equityPct || 0) - (a._d.equityPct || 0))
+}
 export const unseen = list => { const seen = load(SEEN_KEY); return list.filter(a => !seen[a.id]) }
 export function markSeen(ids) { const seen = load(SEEN_KEY); const now = todayStr(); ids.forEach(id => { seen[id] = now }); const keep = Object.entries(seen).filter(([, d]) => days(d) > -60); store(SEEN_KEY, Object.fromEntries(keep)) }
 

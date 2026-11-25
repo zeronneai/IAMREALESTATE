@@ -19,6 +19,11 @@ export async function urgentItems(db, orgId, now = new Date()) {
     const t = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(a.starts_at))
     items.push(`Appointment ${t}: ${a.title}${a.with_name ? ' with ' + a.with_name : ''}${a.location ? ' at ' + a.location : ''}.`)
   }
+  const since = new Date(now.getTime() - 24 * 3600e3).toISOString()
+  const fresh = await (await db.rest(`parcels?org_id=eq.${orgId}&source=eq.county_foreclosure_map&created_at=gte.${encodeURIComponent(since)}&select=id&limit=500`)).json().catch(() => [])
+  const fresh2 = await (await db.rest(`parcels?org_id=eq.${orgId}&source=eq.county_map&created_at=gte.${encodeURIComponent(since)}&select=id&limit=500`)).json().catch(() => [])
+  const nNew = (Array.isArray(fresh) ? fresh.length : 0) + (Array.isArray(fresh2) ? fresh2.length : 0)
+  if (nNew) items.push(`${nNew} new foreclosure ${nNew === 1 ? 'home was' : 'homes were'} added in the last 24 hours. The best ones are in the list "Oportunidades de Jarvis".`)
   const msgs = await (await db.rest(`messages?org_id=eq.${orgId}&direction=eq.in&read=eq.false&select=peer&limit=200`)).json().catch(() => [])
   const peers = new Set((Array.isArray(msgs) ? msgs : []).map(m => m.peer))
   if (peers.size) items.push(`${peers.size} ${peers.size === 1 ? 'person is' : 'people are'} waiting for an answer to a text or email.`)
