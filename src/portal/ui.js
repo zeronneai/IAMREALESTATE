@@ -45,7 +45,7 @@ export function scoreColor(s) {
 export const scoreInk = s => s >= 70 ? '#c99a2e' : s >= 50 ? '#3a362f' : s >= 30 ? '#8f897d' : '#c9c3b8'
 export const scorePill = s => `<span class="score" style="background:${scoreColor(s)}">${s}</span>`
 export const statusPill = st => {
-  const cls = { new: 'blue', contacted: '', appointment: 'gold', offer: 'gold', under_contract: 'ok', dead: 'bad' }[st] || ''
+  const cls = { new: 'blue', contacted: 'warn', appointment: 'gold', offer: 'gold', under_contract: 'ok', dead: 'bad' }[st] || ''
   return `<span class="pill ${cls}">${esc(t('st.' + st))}</span>`
 }
 export const tagPill = tg => {
@@ -215,11 +215,11 @@ export async function pushCRM(ids) {
 }
 
 // ---------- table ----------
-export function table({ rows, cols, sort, onSort, onRow, selectable = true }) {
+export function table({ rows, cols, sort, onSort, onRow, selectable = true, accent = null }) {
   const allSel = rows.length && rows.every(r => selection.has(r.id))
   const head = `<tr>${selectable ? `<th class="cb"><input type="checkbox" data-all ${allSel ? 'checked' : ''} aria-label="select all" /></th>` : ''}${cols.map(c => `<th class="${c.num ? 'num' : ''}" data-sort="${c.key}">${esc(c.label)}${sort?.key === c.key ? `<span class="ar">${sort.dir > 0 ? '↑' : '↓'}</span>` : ''}</th>`).join('')}</tr>`
-  const body = rows.map(r => `<tr data-id="${esc(r.id)}" class="${selection.has(r.id) ? 'sel' : ''}">${selectable ? `<td class="cb"><input type="checkbox" data-cb ${selection.has(r.id) ? 'checked' : ''} aria-label="select" /></td>` : ''}${cols.map(c => `<td class="${c.num ? 'num' : ''} ${c.cls || ''}">${c.render(r)}</td>`).join('')}</tr>`).join('')
-  const html = `<div class="tablewrap"><table class="dt"><thead>${head}</thead><tbody>${body || `<tr><td colspan="${cols.length + 1}" class="muted" style="padding:30px;text-align:center">0 ${esc(t('rows'))}</td></tr>`}</tbody></table></div>`
+  const body = rows.map(r => `<tr data-id="${esc(r.id)}" class="${selection.has(r.id) ? 'sel' : ''}"${accent ? ` style="--acc:${accent(r)}"` : ''}>${selectable ? `<td class="cb"><input type="checkbox" data-cb ${selection.has(r.id) ? 'checked' : ''} aria-label="select" /></td>` : ''}${cols.map(c => `<td class="${c.num ? 'num' : ''} ${c.cls || ''}">${c.render(r)}</td>`).join('')}</tr>`).join('')
+  const html = `<div class="tablewrap"><table class="dt${accent ? ' acc' : ''}"><thead>${head}</thead><tbody>${body || `<tr><td colspan="${cols.length + 1}" class="muted" style="padding:30px;text-align:center">0 ${esc(t('rows'))}</td></tr>`}</tbody></table></div>`
   const bind = root => {
     const tb = $('table.dt', root)
     tb.addEventListener('click', e => {

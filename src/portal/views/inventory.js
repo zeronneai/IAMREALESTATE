@@ -1,9 +1,10 @@
 import { t } from '../i18n.js'
 import * as S from '../store.js'
 import { esc, money, date, modal, toast, icon, photoUrl } from '../ui.js'
+import { CAT, invCat } from '../cats.js'
 
 const STAT = ['acquisition', 'rehab', 'listed', 'rented', 'financed', 'owned', 'sold']
-const statCls = { acquisition: 'blue', rehab: 'warn', listed: 'gold', rented: 'ok', sold: '' }
+const statCls = { acquisition: 'blue', rehab: 'warn', listed: 'gold', rented: 'ok', financed: 'purple', owned: 'blue', sold: '' }
 let filter = ''
 
 export const invMath = v => {
@@ -18,7 +19,8 @@ export const invMath = v => {
 
 export function inventoryView(el) {
   const all = S.inventory()
-  const items = all.filter(v => !filter || v.status === filter)
+  // Sold homes are not theirs anymore: only under their own "Sold" filter, never in "All".
+  const items = all.filter(v => filter ? v.status === filter : v.status !== 'sold')
   const active = all.filter(v => v.status !== 'sold')
   const tot = active.reduce((a, v) => { const m = invMath(v); a.inv += m.invested; a.arv += v.arv || 0; a.profit += m.profit; a.rent += v.rent || 0; return a }, { inv: 0, arv: 0, profit: 0, rent: 0 })
 
@@ -31,14 +33,15 @@ export function inventoryView(el) {
   </div>
   <div class="pub-banner fade-in"><span class="pub-dot"></span><div><b>${esc(t('pub.live_count'))}: ${all.filter(v => v.published && v.status !== 'sold').length}</b><small>${esc(t('pub.banner'))}</small></div><a class="btn sm" href="/#homes" target="_blank" rel="noopener">${esc(t('pub.see_site'))}</a></div>
   <div class="toolbar">
-    <div class="chips"><button class="chip ${!filter ? 'on' : ''}" data-s="">${esc(t('f.all'))} · ${all.length}</button>${STAT.map(s => `<button class="chip ${filter === s ? 'on' : ''}" data-s="${s}">${esc(t('is.' + s))} · ${all.filter(v => v.status === s).length}</button>`).join('')}</div>
+    <div class="chips"><button class="chip ${!filter ? 'on' : ''}" data-s="">${esc(t('f.all'))} · ${all.filter(v => v.status !== 'sold').length}</button>${STAT.map(s => `<button class="chip ${filter === s ? 'on' : ''}" data-s="${s}">${esc(t('is.' + s))} · ${all.filter(v => v.status === s).length}</button>`).join('')}</div>
     <span class="sp"></span><button class="btn gold" data-add>${icon('plus')}${esc(t('inv.add'))}</button>
   </div>
   <div class="inv-grid">${items.map(v => {
     const m = invMath(v); const over = (v.rehabActual || 0) > (v.rehabBudget || 0)
     const lp = v.parcelId && S.parcel(v.parcelId)
-    const cover = v.listing?.photos?.[0] || (lp && !lp.demo ? photoUrl(lp, 'street', 640, 300, true) : null)
-    return `<article class="inv fade-in ${v.published ? 'is-pub' : ''}" data-id="${esc(v.id)}">
+    // Real photos first; if none, the Google Street View photo of the address (until they upload theirs).
+    const cover = v.listing?.photos?.[0] || (lp && !lp.demo ? photoUrl(lp, 'street', 640, 300, true) : (!v.demo && v.address ? photoUrl({ address: v.address, zip: v.zip, city: 'El Paso', state: 'TX' }, 'street', 640, 300, true) : null))
+    return `<article class="inv fade-in ${v.published ? 'is-pub' : ''}" data-id="${esc(v.id)}" style="--acc:${invCat(v) ? CAT[invCat(v)] : '#9a9a9a'}">
       ${cover ? `<img class="inv-cover" src="${esc(cover)}" alt="" onerror="this.remove()">` : ''}
       <button class="pub-toggle ${v.published ? 'on' : ''}" data-pub="${esc(v.id)}" ${v.status === 'sold' ? 'disabled' : ''} title="${esc(t(v.published ? 'pub.hint_on' : 'pub.hint_off'))}">
         <span class="pt-track"><span class="pt-knob"></span></span><span class="pt-label">${esc(t(v.published ? 'pub.public' : 'pub.internal'))}</span>

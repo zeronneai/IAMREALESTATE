@@ -3,6 +3,7 @@ import { t } from '../i18n.js'
 import * as S from '../store.js'
 import { esc, money, date, table, sortRows, scorePill, statusPill, tagPill, selection, selChanged, thumb, modal, toast, icon } from '../ui.js'
 import { openDrawer } from '../drawer.js'
+import { CAT, catOf, catDot, daysPill } from '../cats.js'
 import { mountMap } from '../map.js'
 import { jitter } from './importer.js'
 import * as EP from '../epcad.js'
@@ -42,10 +43,10 @@ export function leads(el, mode, params = {}) {
   const sorted = sortRows(rows, st.sort, getters)
 
   const cols = [
-    { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<div class="addr-ph">${thumb(p)}<div><b>${esc(p.address)}</b><span>${esc(p.zip)} · ${esc(p.type || '')}</span></div></div>` },
+    { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<div class="addr-ph">${thumb(p)}<div><b>${catDot(catOf(p))}${esc(p.address)}</b><span>${esc(p.zip)} · ${esc(p.type || '')}</span></div></div>` },
     { key: 'owner', label: t('c.owner'), render: p => `${esc(p.owners?.[0]?.name || 'n/a')}${p._d.absentee ? ' <span class="pill blue">ABS</span>' : ''}${(p.contacts || []).some(c => c.kind === 'phone') ? ' <span class="pill ok">☎</span>' : ''}` },
     ...(mode === 'foreclosures' ? [
-      { key: 'sale', label: t('c.sale'), render: p => `<span class="mono">${esc(date(p.foreclosure.saleDate))}</span> <span class="dim mono" style="font-size:11px">${p._d.daysToSale}d</span>` },
+      { key: 'sale', label: t('c.sale'), render: p => `<span class="mono">${esc(date(p.foreclosure.saleDate))}</span> ${daysPill(p._d.daysToSale)}` },
       { key: 'lender', label: t('c.lender'), render: p => `<span style="max-width:180px;display:inline-block;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">${esc(p.foreclosure.mortgagee || '')}</span>` },
     ] : [{ key: 'tags', label: t('c.tags'), render: p => (p.tags || []).filter(x => x !== 'high_equity').slice(0, 3).map(tagPill).join(' ') }]),
     { key: 'value', label: t('c.value'), num: true, render: p => money(p.marketValue) + (p.valueEstimated && p.marketValue ? '<small class="dim" title="Est. (sqft)">*</small>' : '') },
@@ -57,7 +58,7 @@ export function leads(el, mode, params = {}) {
     { key: 'score', label: t('c.score'), num: true, render: p => scorePill(p._score) },
     { key: 'status', label: t('c.status'), render: p => statusPill(p.status) },
   ]
-  const tb = table({ rows: sorted, cols, sort: st.sort, onSort: k => { st.sort = st.sort.key === k ? { key: k, dir: -st.sort.dir } : { key: k, dir: ['score', 'equity', 'value', 'taxes', 'years'].includes(k) ? -1 : 1 }; leads(el, mode) }, onRow: openDrawer })
+  const tb = table({ rows: sorted, cols, sort: st.sort, onSort: k => { st.sort = st.sort.key === k ? { key: k, dir: -st.sort.dir } : { key: k, dir: ['score', 'equity', 'value', 'taxes', 'years'].includes(k) ? -1 : 1 }; leads(el, mode) }, onRow: openDrawer, accent: p => CAT[catOf(p)] })
 
   const opt = (v, label, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(label)}</option>`
   el.innerHTML = `

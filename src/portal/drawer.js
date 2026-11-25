@@ -7,6 +7,7 @@ import { researchLinks } from './research.js'
 import { startConversation } from './views/inbox.js'
 import * as DNC from './dnc.js'
 import * as EP from './epcad.js'
+import { catOf, catPill } from './cats.js'
 
 DNC.ready().catch(() => {})
 EP.ready().catch(() => {})
@@ -46,7 +47,7 @@ function render(dr) {
   dr.innerHTML = `
   <div class="dr-head">
     <button class="btn ghost sm x" data-x aria-label="${esc(t('d.close'))}">${icon('x')}</button>
-    <div class="chips">${(p.tags || []).map(tagPill).join('')}${p.demo ? '<span class="pill">DEMO</span>' : ''}</div>
+    <div class="chips">${catPill(catOf(p))}${(p.tags || []).map(tagPill).join('')}${p.demo ? '<span class="pill">DEMO</span>' : ''}</div>
     <h2>${esc(p.address)}</h2>
     <div class="muted">${esc([`${p.city || ''}, ${p.state || ''} ${p.zip || ''}`.trim(), p.type, p.epcadId ? 'EPCAD ' + p.epcadId : ''].filter(Boolean).join(' · '))}</div>
     <div class="links" style="margin-top:12px">

@@ -1160,3 +1160,12 @@ html:not(.dark) .al-panel { background: #fff; }
 @media (max-width: 640px) { .al-panel { position: fixed; left: 4vw; right: 4vw; top: 64px; width: auto; } }
 html.dark .al-item, html.dark .al-item:visited { color: #ececec; } html:not(.dark) .al-item { color: #1a1a1a; }
 .va-sms { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line-2); border-radius: 12px; }
+
+/* Category colors (cats.js): stripe on table rows and inventory cards, dot before the address, pill in the drawer. */
+table.dt.acc tbody tr > td:first-child { box-shadow: inset 4px 0 0 var(--acc, transparent); }
+.inv { box-shadow: inset 0 4px 0 var(--acc, transparent); }
+.cat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; box-shadow: 0 0 0 2px rgba(255,255,255,.08); }
+.pill.cat { background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--c); display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.pill.cat i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.pill.purple { background: rgba(139,92,246,.15); color: #a78bfa; }
+.map-legend label b { font-weight: 700; margin-left: 2px; }

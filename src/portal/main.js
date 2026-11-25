@@ -39,7 +39,7 @@ const ROUTES = {
   sequences: { icon: 'route', render: el => sequencesView(el), count: () => S.enrollments().filter(e => e.status === 'active').length || '' },
   voice: { icon: 'phone', render: el => voiceView(el), still: true, count: () => S.voiceCalls().filter(c => !c.reviewed).length || '' },
   lists: { icon: 'lists', render: el => lists(el), count: () => S.lists().length },
-  inventory: { icon: 'inventory', render: el => inventoryView(el), count: () => S.inventory().length },
+  inventory: { icon: 'inventory', render: el => inventoryView(el), count: () => S.inventory().filter(v => v.status !== 'sold').length },
   portfolio: { icon: 'inventory', render: el => portfolioView(el), still: true, count: () => S.periodItems(S.monthStart()).filter(i => i.status === 'late').length || '' },
   finance: { icon: 'mortgages', render: el => financeView(el), still: true, count: () => S.periodItems(S.monthStart()).filter(i => i.ob.dir === 'out' && (i.status === 'late' || i.status === 'due')).length || '' },
   mortgages: { icon: 'mortgages', render: el => mortgages(el) },
@@ -88,6 +88,7 @@ function shell() {
       ${brandMark()}
       <nav class="nav" aria-label="Portal">${Object.entries(ROUTES).filter(([k]) => allowed(k)).map(([k, r]) => `<a href="#/${k}" data-r="${k}">${icon(r.icon)}<span>${esc(t('nav.' + k))}</span>${r.count ? `<span class="count">${r.count()}</span>` : ''}</a>`).join('')}</nav>
       <div class="side-foot">
+        <a class="btn sm ghost app-btn" href="/" target="_blank" rel="noopener">🌐 ${esc(t('web.btn'))}</a>
         ${standalone() ? '' : `<button class="btn sm ghost app-btn" data-install>${icon('download')}${esc(t('app.btn'))}</button>`}
         <button class="acct" data-acct aria-haspopup="menu"><span class="av">${esc(initials(S.userEmail()))}</span><span class="who"><b>${esc(S.userEmail())}</b><small>${esc([S.orgName(), t('role.' + (S.role() || 'viewer'))].filter(Boolean).join(' · '))}</small></span></button>
         ${credit()}

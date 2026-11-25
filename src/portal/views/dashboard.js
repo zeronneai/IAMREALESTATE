@@ -5,29 +5,19 @@ import { firstTuesdays, today, daysUntil } from '../score.js'
 import { openDrawer } from '../drawer.js'
 import { mountMap } from '../map.js'
 
-// Map colors asked by I AM: red = foreclosures, green = working this month, blue = homes we own.
-const PIN = { own: '#2f6fed', work: '#22a55a', fc: '#e5484d', other: '#9a9a9a' }
-const mapShow = { own: true, work: true, fc: true, other: false }
-const WORKING = ['contacted', 'appointment', 'offer', 'under_contract']
-// Our homes: linked to the property, or same street number and street name.
-const key = a => String(a || '').toUpperCase().replace(/[.,#&-]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 2).join(' ')
-const ownedOf = p => S.inventoryFor(p.id) || S.inventory().find(v => v.status !== 'sold' && key(v.address) === key(p.address)) || null
-function pinOf(p) {
-  const v = ownedOf(p)
-  if (v && v.status !== 'sold') return 'own'
-  if (WORKING.includes(p.status)) return 'work'
-  if (p.foreclosure && (p._d?.daysToSale ?? -1) >= 0) return 'fc'
-  return 'other'
-}
+// Map colors asked by I AM (shared with tables and lists, see cats.js): blue ours, purple owner financed,
+// green working this month, red foreclosures, gray other leads.
+import { CAT as PIN, CATS, catOf as pinOf, ownedOf, invCat, ourHomes, addrKey } from '../cats.js'
+const mapShow = { own: true, fin: true, work: true, fc: true, other: false }
 // Our homes with no mapped property: pin them from their own address (geocoded once and saved on the home).
 const geoTried = new Set()
 function homePins(ps) {
-  const mapped = new Set(ps.filter(p => p.lat != null && p.status !== 'dead').map(p => ownedOf(p)?.id).filter(Boolean))
-  return S.inventory().filter(v => v.status !== 'sold' && !mapped.has(v.id))
+  const mapped = new Set(ps.filter(p => p.lat != null && p.status !== 'dead' && ownedOf(p)).map(p => addrKey(ownedOf(p).address)))
+  return ourHomes().filter(v => !mapped.has(addrKey(v.address)))
 }
 function homeHtml(v) {
   const ph = v.listing?.photos?.[0], note = v.notes || ''
-  return `${ph ? `<img class="pop-ph" src="${esc(ph)}" alt="">` : ''}<span class="pop-k" style="background:${PIN.own}">${esc(t('dash.pin_own'))}</span>${note ? `<div class="pop-note">${esc(String(note).slice(0, 140))}</div>` : ''}<b>${esc(v.address)}</b><br/>${esc(t('is.' + v.status))}<br/><a href="#/inventory">${esc(t('dash.pin_open_home'))}</a>`
+  return `${ph ? `<img class="pop-ph" src="${esc(ph)}" alt="">` : ''}<span class="pop-k" style="background:${PIN[invCat(v)]}">${esc(t('cat.' + invCat(v)))}</span>${note ? `<div class="pop-note">${esc(String(note).slice(0, 140))}</div>` : ''}<b>${esc(v.address)}</b><br/>${esc(t('is.' + v.status))}<br/><a href="#/inventory">${esc(t('dash.pin_open_home'))}</a>`
 }
 let geoBusy = false
 async function geocodeHomes(list) {
@@ -54,13 +44,16 @@ async function geocodeHomes(list) {
 function popTop(p) {
   const v = ownedOf(p), ph = (p.photos || [])[0] || v?.listing?.photos?.[0]
   const k = pinOf(p), note = (p.activities || []).find(a => a.kind === 'note')?.body || p.notes || v?.notes || ''
-  return `${ph ? `<img class="pop-ph" src="${esc(ph)}" alt="">` : ''}<span class="pop-k" style="background:${PIN[k]}">${esc(t('dash.pin_' + k))}</span>${note ? `<div class="pop-note">${esc(String(note).slice(0, 140))}</div>` : ''}`
+  return `${ph ? `<img class="pop-ph" src="${esc(ph)}" alt="">` : ''}<span class="pop-k" style="background:${PIN[k]}">${esc(t('cat.' + k))}</span>${note ? `<div class="pop-note">${esc(String(note).slice(0, 140))}</div>` : ''}`
 }
 
 export function dashboard(el) {
   const ps = S.parcels()
-  const counts = { own: 0, work: 0, fc: 0, other: 0 }; ps.filter(p => p.status !== 'dead').forEach(p => counts[pinOf(p)]++)
-  const homes = homePins(ps); counts.own += homes.length
+  // Our homes count once each (no duplicates); leads count by their category.
+  const counts = { own: 0, fin: 0, work: 0, fc: 0, other: 0 }
+  ps.filter(p => p.status !== 'dead').forEach(p => { const k = pinOf(p); if (k !== 'own' && k !== 'fin') counts[k]++ })
+  ourHomes().forEach(v => counts[invCat(v)]++)
+  const homes = homePins(ps)
   const fcs = ps.filter(p => p.foreclosure && p._d.daysToSale >= 0)
   const sales = firstTuesdays(today(), 3)
   const next = sales[0]
@@ -105,7 +98,7 @@ export function dashboard(el) {
     </div>
   </div>
   <div class="grid-2">
-    <div class="card fade-in"><h3>${esc(t('dash.map'))}</h3><div class="map-legend">${Object.entries(PIN).map(([k, c]) => `<label class="${mapShow[k] ? 'on' : ''}"><input type="checkbox" data-pin="${k}" ${mapShow[k] ? 'checked' : ''}><i style="background:${c}"></i>${esc(t('dash.pin_' + k))} <span class="dim">${counts[k]}</span></label>`).join('')}</div><div class="map" id="dmap"></div></div>
+    <div class="card fade-in"><h3>${esc(t('dash.map'))}</h3><div class="map-legend">${CATS.map(k => `<label class="${mapShow[k] ? 'on' : ''}" title="${esc(t('cat.' + k + '_hint'))}"><input type="checkbox" data-pin="${k}" ${mapShow[k] ? 'checked' : ''}><i style="background:${PIN[k]}"></i>${esc(t('cat.' + k))} <b>${counts[k]}</b></label>`).join('')}</div><div class="map" id="dmap"></div></div>
     <div style="display:grid;gap:18px;align-content:start">
       <div class="card fade-in"><h3>${esc(t('dash.pipeline'))}</h3><div class="funnel">${stages.map((s, i) => `<div class="funnel-row"><span>${esc(t('st.' + s))}</span><span class="b"><i style="width:${(stageN[i] / maxS) * 100}%"></i></span><span class="mono">${stageN[i]}</span></div>`).join('')}</div></div>
       <div class="card fade-in"><h3>${esc(t('dash.tasks'))}</h3>${tasks.length ? tasks.map(x => `<div class="task" data-open="${esc(x.p.id)}" style="cursor:pointer"><span class="pill ${daysUntil(x.due) < 0 ? 'bad' : ''}">${esc(x.due ? date(x.due) : '')}</span><span>${esc(x.title)}</span><span class="dim" style="font-size:12px">${esc(x.p.address)}</span></div>`).join('') : `<p class="muted">${esc(t('dash.none'))}</p>`}</div>
@@ -116,6 +109,6 @@ export function dashboard(el) {
   el.querySelectorAll('[data-pin]').forEach(c => c.onchange = () => { mapShow[c.dataset.pin] = c.checked; dashboard(el) })
   const live = ps.filter(p => p.status !== 'dead')
   const extraPins = homes.filter(v => v.listing?.geo).map(v => ({ id: 'inv-' + v.id, _inv: v, lat: v.listing.geo.lat, lng: v.listing.geo.lng, _html: homeHtml(v) }))
-  mountMap(el.querySelector('#dmap'), [...live, ...extraPins], { onOpen: openDrawer, colorOf: p => { if (p._inv) return mapShow.own ? PIN.own : null; const k = pinOf(p); return mapShow[k] ? PIN[k] : null }, extra: popTop })
+  mountMap(el.querySelector('#dmap'), [...live, ...extraPins], { onOpen: openDrawer, colorOf: p => { const k = p._inv ? invCat(p._inv) : pinOf(p); return mapShow[k] ? PIN[k] : null }, extra: popTop })
   geocodeHomes(homes)
 }

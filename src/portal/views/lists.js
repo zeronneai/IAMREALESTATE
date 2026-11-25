@@ -3,6 +3,7 @@ import * as S from '../store.js'
 import { esc, money, date, table, scorePill, statusPill, exportCSV, skipTrace, pushCRM, toast, selection, selChanged, icon, routeIds } from '../ui.js'
 import { isDnc } from '../dnc.js'
 import { openDrawer } from '../drawer.js'
+import { CAT, catOf, catDot, daysPill } from '../cats.js'
 
 let active = null
 export function lists(el) {
@@ -14,7 +15,7 @@ export function lists(el) {
   const needIds = rows.filter(p => !(p.contacts || []).some(c => c.kind === 'phone') && !(p.activities || []).some(a => a.kind === 'skiptrace')).map(p => p.id)
   const needPhones = needIds.length
   const cols = [
-    { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<b>${esc(p.address)}</b><span>${esc(p.zip)}</span>` },
+    { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<b>${catDot(catOf(p))}${esc(p.address)}</b><span>${esc(p.zip)}</span>` },
     { key: 'owner', label: t('c.owner'), render: p => esc(p.owners?.[0]?.name || 'n/a') },
     { key: 'phone', label: t('c.phone'), render: p => {
       const ph = (p.contacts || []).filter(c => c.kind === 'phone')
@@ -27,13 +28,13 @@ export function lists(el) {
       const rest = ph.length - show.length
       return (show.length ? show.map(c => `<span class="mono">${esc(fmt(c.value))}</span>${c.phoneType === 'mobile' ? ' <small class="dim">cel</small>' : ''}`).join('<br/>') : `<span class="dim">${esc(t('ph.all_dnc'))}</span>`) + (rest > 0 ? `<br/><small class="dim">+${rest} ${esc(t('ph.more'))}</small>` : '')
     } },
-    { key: 'sale', label: t('c.sale'), render: p => p.foreclosure ? `<span class="mono">${esc(date(p.foreclosure.saleDate))}</span>` : '<span class="dim">n/a</span>' },
+    { key: 'sale', label: t('c.sale'), render: p => p.foreclosure ? `<span class="mono">${esc(date(p.foreclosure.saleDate))}</span> ${daysPill(p._d.daysToSale)}` : '<span class="dim">n/a</span>' },
     { key: 'equity', label: t('c.equity'), num: true, render: p => money(p._d.equity, true) },
     { key: 'score', label: t('c.score'), num: true, render: p => scorePill(p._score) },
     { key: 'status', label: t('c.status'), render: p => statusPill(p.status) },
     { key: 'rm', label: '', render: p => `<button class="btn sm ghost" data-rm="${esc(p.id)}" aria-label="remove">${icon('x')}</button>` },
   ]
-  const tb = table({ rows, cols, onRow: openDrawer })
+  const tb = table({ rows, cols, onRow: openDrawer, accent: p => CAT[catOf(p)] })
   const traced = rows.filter(p => (p.contacts || []).some(c => c.kind === 'phone')).length
 
   el.innerHTML = `<div class="list-grid fade-in">
