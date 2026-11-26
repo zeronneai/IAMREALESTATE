@@ -403,6 +403,18 @@ export async function setCountyTaxes(id, { entity, year, cur, prior, note, accou
   }
   await updateParcel(id, { notes })
 }
+// Liens read from the County Clerk records (liencheck.js): replaces the previous owner-name-search rows of this home.
+export async function setClerkLiens(id, { note, liens }) {
+  const p = parcel(id); if (!p) return
+  p.liens = [...(p.liens || []).filter(x => x.source !== 'clerk-name-search'), ...liens.map(x => ({ ...x, amount: null, source: 'clerk-name-search' }))]
+  const notes = [String(p.notes || '').replace(/\n?Clerk records \(owner name search[^\n]*/g, '').trim(), note].filter(Boolean).join('\n')
+  if (sb && isUuid(id)) {
+    await sb.from('liens').delete().eq('parcel_id', id).eq('instrument_number', 'clerk-name-search')
+    if (liens.length) await sb.from('liens').insert(liens.map(x => ({ parcel_id: id, lien_type: x.type, holder: x.holder, recorded_date: x.recorded || null, instrument_number: 'clerk-name-search' })))
+  }
+  await updateParcel(id, { notes })
+}
+export const liensChecked = p => /Clerk records \(owner name search/.test(p?.notes || '')
 export const taxChecked = p => /Taxes \(El Paso Tax Office, checked/.test(p?.notes || '')
 export async function setContactFlag(id, value, patch) {
   const p = parcel(id); const c = p?.contacts?.find(x => x.value === value); if (!c) return
@@ -492,7 +504,7 @@ function fromRow(r) {
     owners: (r.owners || []).map(o => ({ id: o.id, name: o.name, mailing: o.mailing_address, mailingCity: o.mailing_city, mailingState: o.mailing_state, mailingZip: o.mailing_zip, absentee: o.is_absentee, deceased: o.deceased })),
     contacts: (r.contacts || []).map(c => ({ kind: c.kind, value: c.value, phoneType: c.phone_type, dnc: c.dnc, litigator: c.litigator, confidence: c.confidence, provider: c.provider })),
     foreclosure: f ? { id: f.id, saleDate: f.sale_date, saleWindow: f.sale_time_window, saleLocation: f.sale_location, filingDate: f.filing_date, trustees: f.trustees || [], mortgagee: f.mortgagee, servicer: f.servicer, originalLoan: +f.original_loan_amount || null, dotDate: f.deed_of_trust_date, estBalance: +f.est_loan_balance || null, instrument: f.instrument_number, attorney: f.attorney_firm, outcome: f.outcome } : null,
-    liens: (r.liens || []).map(l => ({ type: l.lien_type, holder: l.holder, amount: +l.amount, recorded: l.recorded_date })),
+    liens: (r.liens || []).map(l => ({ type: l.lien_type, holder: l.holder, amount: +l.amount, recorded: l.recorded_date, source: l.instrument_number || null })),
     taxes: (r.tax_bills || []).map(x => ({ entity: x.entity, year: x.tax_year, amount: +x.amount_due, delinquent: x.delinquent })),
     activities: (r.activities || []).sort((a, b) => b.created_at.localeCompare(a.created_at)).map(a => ({ id: a.id, kind: a.kind, body: a.body, at: a.created_at })),
     tasks: (r.tasks || []).map(t => ({ id: t.id, title: t.title, due: t.due_on, done: t.done })),

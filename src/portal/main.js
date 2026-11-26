@@ -1,3 +1,4 @@
+import { listenLiens, mountLienBar } from './liencheck.js'
 import { listenTaxes, mountTaxBar } from './taxcheck.js'
 import { bellHtml, mountBell } from './alerts.js'
 import './portal.css'
@@ -109,7 +110,7 @@ function shell() {
   </div>`
   $('[data-acct]').onclick = e => acctMenu(e.currentTarget)
   $('[data-install]')?.addEventListener('click', installApp)
-  mountBell(); listenCounty(); listenTaxes(); mountTaxBar(); setTimeout(() => autoTraceForeclosures().finally(() => import('./countyfc.js').then(m => m.syncOpportunities()).then(n => n && import('./ui.js').then(u => u.toast(t('fc.opp').replace('{n}', n))))), 4000)
+  mountBell(); listenCounty(); listenTaxes(); mountTaxBar(); listenLiens(); mountLienBar(); setTimeout(() => autoTraceForeclosures().finally(() => import('./countyfc.js').then(m => m.syncOpportunities()).then(n => n && import('./ui.js').then(u => u.toast(t('fc.opp').replace('{n}', n))))), 4000)
   $$('[data-lang]').forEach(b => b.onclick = () => setLang(b.dataset.lang))
   $('[data-theme]')?.addEventListener('click', () => { const dark = !document.documentElement.classList.contains('dark'); document.documentElement.classList.toggle('dark', dark); try { localStorage.setItem('iam_theme', dark ? 'dark' : 'light') } catch {} ; shell(); route() })
   $('[data-burger]').onclick = () => $('#side').classList.toggle('open')

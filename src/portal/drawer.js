@@ -3,6 +3,7 @@ import { analyzeDeal } from './views/jarvis.js'
 import { t } from './i18n.js'
 import * as S from './store.js'
 import { checkTaxes } from './taxcheck.js'
+import { checkLiens } from './liencheck.js'
 import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl, photoBox, modal } from './ui.js'
 import { researchLinks } from './research.js'
 import { startConversation } from './views/inbox.js'
@@ -157,14 +158,9 @@ function render(dr) {
   $('.dr-body', dr).scrollTop = keepScroll
   $('[data-x]', dr).onclick = closeDrawer
   $('[data-deal]', dr).onclick = () => { const brief = dealBrief(p); closeDrawer(); analyzeDeal(brief) }
-  // Liens: the County Clerk asks for a human check on every search, so the portal opens it with the owner's name copied.
+  // Liens and taxes: the county sites ask for a person, so the portal opens them and the IAM bookmark does the reading.
   $('[data-taxchk]', dr).onclick = () => checkTaxes([p.id])
-  $('[data-liens]', dr).onclick = async () => {
-    const n = String(p.owners?.[0]?.name || '').toUpperCase().split(/\s*&\s*|,/)[0].split(/\s+/).slice(0, 2).join(' ')
-    try { await navigator.clipboard.writeText(n) } catch { /* no clipboard */ }
-    window.open('https://apps.epcountytx.gov/publicrecords/OfficialPublicRecords', '_blank', 'noopener')
-    toast(t('d.liens_copied').replace('{n}', n))
-  }
+  $('[data-liens]', dr).onclick = () => checkLiens([p.id])
   dr.querySelectorAll('[data-mine]').forEach(fg => fg.onclick = () => modal(`<div class="ph-big"><img src="${esc(p.photos[+fg.dataset.mine])}" alt=""></div><div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn sm gold" data-close>OK</button></div>`, null, { wide: true }))
   dr.querySelectorAll('[data-ph]').forEach(fg => fg.onclick = () => photoBox(p, fg.dataset.ph))
   dr.querySelectorAll('[data-sms]').forEach(b => b.onclick = () => { closeDrawer(); startConversation(p.id, b.dataset.sms) })
