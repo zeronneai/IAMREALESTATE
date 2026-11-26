@@ -38,6 +38,7 @@ export default async function handler(req, res) {
     res.status(200).json({ client_secret: s.client_secret, amount })
   } catch (e) {
     console.error('stripe checkout', e.message)
-    res.status(502).json({ error: 'stripe_error' })
+    // Stripe's own message (no secrets in it) so the team can see what to fix in the Stripe settings.
+    res.status(502).json({ error: 'stripe_error', detail: String(e.message || '').slice(0, 300) })
   }
 }

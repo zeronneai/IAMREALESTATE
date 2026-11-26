@@ -80,14 +80,14 @@
         try {
           const r = await fetch('/api/pay/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, email: document.getElementById('em').value.trim(), amount: oth?.checked ? a : null }) })
           const j = await r.json()
-          if (!j.client_secret) throw new Error(j.error || 'fail')
+          if (!j.client_secret) throw new Error(j.detail || j.error || 'fail')
           await loadStripe()
           // The Stripe payment form, inside this page (card, bank account, Apple Pay / Google Pay when available).
           const checkout = await window.Stripe(info.pk, { locale: lang }).initEmbeddedCheckout({ fetchClientSecret: async () => j.client_secret })
           document.getElementById('pre').hidden = true
           checkout.mount('#checkout')
           document.querySelector('.amt').textContent = money(j.amount || a)
-        } catch { go.disabled = false; go.textContent = `${L.pay} · ${money(chosen() || info.amount)}`; alert(L.fail) }
+        } catch (e) { go.disabled = false; go.textContent = `${L.pay} · ${money(chosen() || info.amount)}`; alert(L.fail + (e?.message && e.message !== 'fail' ? '\n\n' + e.message : '')) }
       }
     }
     let stripeLoading = null
