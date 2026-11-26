@@ -1172,3 +1172,6 @@ table.dt.acc tbody tr > td:first-child { box-shadow: inset 4px 0 0 var(--acc, tr
 /* Phone calls inside Conversations */
 .bub.bub-call { border: 1px dashed rgba(212,168,67,.55); }
 .bub.bub-call a { color: inherit; text-decoration: underline; }
+/* Tax check progress bar */
+.taxbar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; max-width: calc(100vw - 24px); padding: 10px 14px; border-radius: 12px; background: var(--card, #141414); border: 1px solid var(--gold, #d4a843); box-shadow: 0 8px 30px rgba(0,0,0,.35); font-size: 13px; }
+.taxbar span { opacity: .8; }

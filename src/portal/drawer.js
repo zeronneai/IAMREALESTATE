@@ -2,6 +2,7 @@
 import { analyzeDeal } from './views/jarvis.js'
 import { t } from './i18n.js'
 import * as S from './store.js'
+import { checkTaxes } from './taxcheck.js'
 import { esc, money, date, $, scorePill, statusPill, tagPill, icon, skipTrace, pickList, toast, photoUrl, photoBox, modal } from './ui.js'
 import { researchLinks } from './research.js'
 import { startConversation } from './views/inbox.js'
@@ -53,6 +54,7 @@ function render(dr) {
     <div class="links" style="margin-top:12px">
       <button class="btn sm jv-deal" data-deal>${icon('spark')}${esc(t('jv.analyze'))}</button>
       <button class="btn sm ghost" data-liens title="${esc(t('d.liens_tip'))}">${esc(t('d.liens_btn'))}</button>
+      <button class="btn sm ghost" data-taxchk title="${esc(t('tx.btn_tip'))}">${esc(t('tx.btn'))}</button>
       <button class="btn gold sm" data-skip>${icon('phone')}${esc(t('d.skip'))}</button>
       ${(p.contacts || []).length ? `<button class="btn sm" data-msg>${icon('inbox')}${esc(t('msg.button'))}</button>` : ''}
       ${(p.contacts || []).length ? `<button class="btn sm" data-seq>${esc(t('sel.seq'))}</button>` : ''}
@@ -156,6 +158,7 @@ function render(dr) {
   $('[data-x]', dr).onclick = closeDrawer
   $('[data-deal]', dr).onclick = () => { const brief = dealBrief(p); closeDrawer(); analyzeDeal(brief) }
   // Liens: the County Clerk asks for a human check on every search, so the portal opens it with the owner's name copied.
+  $('[data-taxchk]', dr).onclick = () => checkTaxes([p.id])
   $('[data-liens]', dr).onclick = async () => {
     const n = String(p.owners?.[0]?.name || '').toUpperCase().split(/\s*&\s*|,/)[0].split(/\s+/).slice(0, 2).join(' ')
     try { await navigator.clipboard.writeText(n) } catch { /* no clipboard */ }

@@ -1,5 +1,6 @@
 import { t } from '../i18n.js'
 import * as S from '../store.js'
+import { saveTaxData } from '../taxcheck.js'
 import { esc, date, modal, toast, icon, api, fileToDataURL, dropzone, parseCSV, num, toIso, $, money } from '../ui.js'
 import { readDocument } from '../pdfread.js'
 import { parseNotices, parseNotice } from '../parse/notice.js'
@@ -80,6 +81,7 @@ export function importer(el, q = {}) {
   const fcout = el.querySelector('#fcout'), say = m => { if (fcout.isConnected) fcout.textContent = m }
   el.querySelector('[data-fcopen]').onclick = () => { openCountyMap(); say(t('fc.waiting')) }
   el.querySelector('[data-fcbm]').onclick = e => { e.preventDefault(); toast(t('fc.bm_drag')) }
+  if (q.tax) { try { const d = JSON.parse(decodeURIComponent(q.tax)); history.replaceState(null, '', '#/import'); saveTaxData(d) } catch { /* bad link */ } }
   if (q.county && q.county !== 'go') { const data = decodeURIComponent(q.county); history.replaceState(null, '', '#/import'); runCountyImport(data, say) }
   else if (q.county === 'go') el.querySelector('#countyfc').scrollIntoView({ behavior: 'smooth', block: 'start' })
   el.querySelectorAll('[data-sample]').forEach(b => b.onclick = async () => notices([await sampleFile(b.dataset.sample)]))

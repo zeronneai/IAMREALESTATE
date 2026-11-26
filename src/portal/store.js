@@ -390,6 +390,20 @@ export async function addTaxes(id, rows) {
   if (sb && isUuid(id) && fresh.length) await sb.from('tax_bills').insert(fresh.map(x => ({ parcel_id: id, entity: x.entity, tax_year: x.year || null, amount_due: x.amount, delinquent: !!x.delinquent })))
   persist(); emit()
 }
+// Taxes read from the El Paso Tax Office page (taxcheck.js): replaces the previous Tax Office rows of this home.
+export async function setCountyTaxes(id, { entity, year, cur, prior, note, account }) {
+  const p = parcel(id); if (!p) return
+  const rows = [cur > 0 && { entity: `${entity}, ${year} bill`, year, amount: cur, delinquent: false }, prior > 0 && { entity: `${entity}, prior years`, year: year - 1, amount: prior, delinquent: true }].filter(Boolean)
+  p.taxes = [...(p.taxes || []).filter(x => !String(x.entity || '').startsWith('El Paso Tax Office')), ...rows]
+  const notes = [String(p.notes || '').replace(/\n?Taxes \(El Paso Tax Office[^\n]*/g, '').trim(), note].filter(Boolean).join('\n')
+  if (account) p.taxAccount = account
+  if (sb && isUuid(id)) {
+    await sb.from('tax_bills').delete().eq('parcel_id', id).like('entity', 'El Paso Tax Office%')
+    if (rows.length) await sb.from('tax_bills').insert(rows.map(x => ({ parcel_id: id, entity: x.entity, tax_year: x.year, amount_due: x.amount, delinquent: x.delinquent })))
+  }
+  await updateParcel(id, { notes })
+}
+export const taxChecked = p => /Taxes \(El Paso Tax Office, checked/.test(p?.notes || '')
 export async function setContactFlag(id, value, patch) {
   const p = parcel(id); const c = p?.contacts?.find(x => x.value === value); if (!c) return
   Object.assign(c, patch)

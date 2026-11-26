@@ -1,5 +1,6 @@
 import { t } from '../i18n.js'
 import * as S from '../store.js'
+import { checkTaxes } from '../taxcheck.js'
 import { esc, money, date, table, scorePill, statusPill, exportCSV, skipTrace, pushCRM, toast, selection, selChanged, icon, routeIds } from '../ui.js'
 import { isDnc } from '../dnc.js'
 import { openDrawer } from '../drawer.js'
@@ -14,6 +15,7 @@ export function lists(el) {
   // Only homes never looked up and without a phone still need the skip trace.
   const needIds = rows.filter(p => !(p.contacts || []).some(c => c.kind === 'phone') && !(p.activities || []).some(a => a.kind === 'skiptrace')).map(p => p.id)
   const needPhones = needIds.length
+  const taxIds = rows.filter(p => !S.taxChecked(p)).map(p => p.id)
   const cols = [
     { key: 'address', label: t('c.address'), cls: 'addr', render: p => `<b>${catDot(catOf(p))}${esc(p.address)}</b><span>${esc(p.zip)}</span>` },
     { key: 'owner', label: t('c.owner'), render: p => esc(p.owners?.[0]?.name || 'n/a') },
@@ -57,6 +59,7 @@ export function lists(el) {
           <button class="btn gold" data-a="mail">${icon('mail')}${esc(t('sel.mail'))}</button>
           <button class="btn gold" data-a="route">${icon('route')}${esc(t('sel.route'))}</button>
           ${needPhones ? `<button class="btn" data-a="skip">${esc(t('sel.skip'))} (${needPhones})</button>` : ''}
+          ${taxIds.length ? `<button class="btn" data-a="taxes" title="${esc(t('tx.btn_tip'))}">${esc(t('tx.btn'))} (${taxIds.length})</button>` : ''}
           <button class="btn" data-a="reiskip">${icon('download')}${esc(t('lists.export_reiskip'))}</button>
           <button class="btn" data-a="ghl">${icon('download')}${esc(t('lists.export_ghl'))}</button>
           <button class="btn" data-a="generic">${icon('download')}${esc(t('lists.export_generic'))}</button>
@@ -75,6 +78,7 @@ export function lists(el) {
     const a = b.dataset.a, ids = l.ids
     if (a === 'mail') return import('./mailer.js').then(m => m.openMailer(ids))
     if (a === 'route') { routeIds.splice(0, routeIds.length, ...ids); location.hash = '#/route'; return }
+    if (a === 'taxes') return checkTaxes(taxIds)
     if (a === 'skip') { b.disabled = true; b.textContent = t('sel.skip') + '...'; return skipTrace(needIds) }
     if (['reiskip', 'ghl', 'generic'].includes(a)) return exportCSV(ids, a)
     if (a === 'crm') return pushCRM(ids)
