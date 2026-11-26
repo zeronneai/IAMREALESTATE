@@ -2,7 +2,7 @@
 // The call is turn based: Twilio listens (speech to text), Claude answers, Cartesia speaks (Twilio's own voice as backup).
 import crypto from 'node:crypto'
 import { sb, e164 } from './outreach.js'
-import { systemPrompt, DEFAULT_AGENT } from './voice.js'
+import { systemPrompt, DEFAULT_AGENT, claude, SUMMARY_PROMPT } from './voice.js'
 
 export const TZ = process.env.OUTREACH_TZ || 'America/Denver'
 const auth = () => 'Basic ' + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
@@ -13,6 +13,28 @@ export const sign = (id, n) => crypto.createHmac('sha256', process.env.TWILIO_AU
 
 // Hour in El Paso. Customer calls only 9 am to 8 pm (the law allows 8 to 9; we keep a margin).
 export function localHour(now = new Date()) { return +new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' }).format(now) }
+
+// Office hours for incoming calls. Default: Monday to Saturday, 9 am to 5 pm in El Paso (Sunday closed).
+export const OFFICE = { days: [1, 2, 3, 4, 5, 6], open: 9, close: 17 }
+export function officeOf(cfg = {}) {
+  const days = Array.isArray(cfg.office_days) && cfg.office_days.length ? cfg.office_days.map(Number) : OFFICE.days
+  const open = Number.isFinite(+cfg.office_open) && cfg.office_open !== '' ? +cfg.office_open : OFFICE.open
+  const close = Number.isFinite(+cfg.office_close) && cfg.office_close !== '' ? +cfg.office_close : OFFICE.close
+  return { days, open, close }
+}
+export function officeOpen(cfg, now = new Date()) {
+  const o = officeOf(cfg)
+  const wd = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(now)]
+  const h = localHour(now)
+  return o.days.includes(wd) && h >= o.open && h < o.close
+}
+export function officeText(cfg) {
+  const o = officeOf(cfg), N = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const ampm = h => h === 0 ? '12 am' : h < 12 ? h + ' am' : h === 12 ? '12 pm' : (h - 12) + ' pm'
+  const d = [...o.days].sort()
+  const days = d.length > 2 && d.every((x, i) => i === 0 || x === d[i - 1] + 1) ? `${N[d[0]]} to ${N[d[d.length - 1]]}` : d.map(x => N[x]).join(', ')
+  return `${days}, ${ampm(o.open)} to ${ampm(o.close)} El Paso time`
+}
 
 export async function orgSettings(db, orgId) {
   const org = (await (await db.rest(`orgs?id=eq.${orgId}&select=id,name,sms_number,active`)).json().catch(() => []))?.[0] || null
@@ -54,6 +76,13 @@ ${String(d.brief || 'Nothing urgent.').slice(0, 6000)}
 How the call goes: greet them by first name, say you are Jarvis, and give the most important item first in one or two sentences. Then ask if they want more detail or the next item. Answer questions only with what you know above; if it is not there, say it is in the portal. Never invent numbers.
 When they are done or say goodbye, say a short goodbye and put [END] at the very end.`
   }
+  if (call.source === 'phone') {
+    return systemPrompt({ ...cfg, hours: officeText(cfg) }, lang) + `
+This is an INCOMING call to the company line${call.data?.after_hours ? ', outside office hours, so nobody from the team is available right now' : ', and nobody from the team could pick up'}. You already greeted the caller.
+Take a complete message: who they are, why they are calling, and the best number and time to call back. If they are calling about selling a house, ask the questions above. If it is about something else (a buyer, a renter, a vendor, a team matter), just take the message.
+If they ask for a person, say someone from the team will call them back${call.data?.after_hours ? ' as soon as the office opens' : ' shortly'}. Never promise an exact time.
+If the caller speaks Spanish, answer in Spanish and put the token [ES] at the very end of your reply. If they speak English, reply in English.`
+  }
   // Customer call: the same agent as the phone line, calling someone who gave permission.
   return systemPrompt(cfg, lang) + `
 This is an OUTBOUND call you are making. The person is ${d.name || 'the customer'}${d.address ? `, about the property at ${d.address}` : ''}. They gave permission to be contacted (${d.consent || 'consent on file'}).
@@ -75,6 +104,40 @@ export async function pickVoice(cfg, lang) {
   const j = r?.ok ? await r.json() : null
   const list = Array.isArray(j) ? j : (j?.data || [])
   return list.find(v => String(v.language || '').startsWith(lang))?.id || null
+}
+
+// End of a call (Twilio status callback): duration, summary and the caller's details; for incoming calls,
+// Jarvis calls the team when it is important (hot lead or they asked for a person).
+export async function finishCall({ db, host, call, p }) {
+  const lang = call.lang === 'es' ? 'es' : 'en'
+  const done = { status: p.CallStatus || 'completed', duration_sec: +p.CallDuration || call.duration_sec || 0 }
+  const tr = call.transcript || []
+  const talked = tr.some(x => x.role === 'caller')
+  let data = null
+  if ((call.source === 'outbound' || call.source === 'phone') && talked && process.env.ANTHROPIC_API_KEY) {
+    const lines = tr.map(x => `${x.role === 'agent' ? 'Assistant' : 'Person'}: ${x.text}`).join('\n')
+    const out = await claude({ system: SUMMARY_PROMPT, messages: [{ role: 'user', content: `Language for summary and next_step: ${lang === 'es' ? 'Spanish' : 'English'}\n${call.source === 'phone' ? 'This was an incoming call to the company line. The caller phone number is ' + (call.phone || 'unknown') + '.\n' : ''}\n${lines}` }], max: 700 }).catch(() => '')
+    const m = out.match(/\{[\s\S]*\}/); try { data = m ? JSON.parse(m[0]) : null } catch { data = null }
+    if (data) Object.assign(done, { summary: data.summary || null, interest: data.interest || null, data: { ...(call.data || {}), ...data } })
+  }
+  if (!done.summary && !call.summary) {
+    if (call.source === 'phone') done.summary = call.data?.answered ? (lang === 'es' ? 'Contestó alguien del equipo.' : 'Answered by the team.') : talked ? (lang === 'es' ? 'Llamada atendida por la IA.' : 'Call handled by the AI.') : (lang === 'es' ? 'Colgó antes de hablar.' : 'Hung up before talking.')
+    else done.summary = talked ? (lang === 'es' ? 'Llamada completada.' : 'Call completed.') : (lang === 'es' ? `No contestó (${p.CallStatus || 'sin respuesta'}).` : `No answer (${p.CallStatus || 'no answer'}).`)
+  }
+  if (call.source === 'phone' && call.data?.answered) done.reviewed = true
+  await db.rest(`voice_calls?id=eq.${call.id}`, { method: 'PATCH', body: JSON.stringify(done) })
+  if (call.source === 'phone' && data && (data.interest === 'hot' || data.wants_human) && !data.do_not_contact) await alertTeam({ db, host, call, data }).catch(e => console.error('jarvis alert', e.message))
+}
+
+// Jarvis calls the team members who turned on Jarvis calls (8 am to 9 pm El Paso time).
+async function alertTeam({ db, host, call, data }) {
+  const h = localHour(); if (h < 8 || h >= 21) return
+  const team = await (await db.rest(`team_members?org_id=eq.${call.org_id}&jarvis_call=is.true&phone=not.is.null&role=in.(admin,agent)&select=full_name,email,phone,call_lang`)).json().catch(() => [])
+  const who = data.name || 'A caller', num = String(call.phone || '').replace(/^\+1/, '')
+  const brief = [`- ${who} just called the company line${num ? ' from ' + num.split('').join(' ') : ''}.`, data.property_address && `- Property: ${data.property_address}.`, data.motivation && `- Why: ${data.motivation}.`, data.timeline && `- Timeline: ${data.timeline}.`, data.best_time && `- Best time to call back: ${data.best_time}.`, data.wants_human && '- They asked to talk to a person.', data.next_step && `- Next step: ${data.next_step}`, '- The full call is in the portal, under Conversations and AI calls.'].filter(Boolean).join('\n')
+  for (const m of (Array.isArray(team) ? team : []).slice(0, 3)) {
+    await placeCall({ db, host, orgId: call.org_id, to: m.phone, source: 'jarvis', lang: m.call_lang === 'es' ? 'es' : 'en', data: { name: m.full_name || m.email, reason: data.wants_human ? 'A caller asked to talk to a person.' : 'A hot lead just called the company line.', brief } })
+  }
 }
 
 export { sb }

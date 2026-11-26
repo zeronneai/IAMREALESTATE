@@ -543,9 +543,13 @@ export async function loadMessages() {
   msgs = fresh
   if (changed) emit()
 }
+// Phone calls (incoming calls the AI or the team took, and AI calls to customers) sit in the same thread as the texts.
+const callPeer = v => { const d = String(v || '').replace(/\D/g, ''); return d.length === 10 ? '+1' + d : d ? '+' + d : '' }
+const callItems = () => voiceCalls().filter(c => (c.source === 'phone' || c.source === 'outbound') && c.phone && c.at)
+  .map(c => ({ id: 'call:' + c.id, callId: c.id, kind: 'call', channel: 'call', parcelId: c.parcelId || null, peer: callPeer(c.phone), dir: c.source === 'phone' ? 'in' : 'out', at: c.at, body: c.summary || '', read: true, call: c }))
 export function threads() {
   const map = new Map()
-  for (const m of [...messages()].sort((a, b) => a.at.localeCompare(b.at))) {
+  for (const m of [...messages(), ...callItems()].sort((a, b) => a.at.localeCompare(b.at))) {
     const key = m.parcelId || m.peer
     const th = map.get(key) || { key, parcelId: m.parcelId, peers: new Set(), items: [], unread: 0 }
     th.items.push(m); th.peers.add(m.peer); if (m.dir === 'in' && !m.read) th.unread++
@@ -686,7 +690,7 @@ export const VOICE_DEFAULT = {
   name: 'Ava', lang: 'auto',
   greeting_en: 'Hi, thanks for calling {{company}}. This is {{name}}, the virtual assistant. Are you calling about a property you might want to sell?',
   greeting_es: 'Hola, gracias por llamar a {{company}}. Habla {{name}}, la asistente virtual. ¿Llama por una propiedad que le gustaría vender?',
-  ask: ['address', 'motivation', 'timeline', 'condition', 'price', 'callback'], hours: 'Mon to Fri 9am to 5pm', transfer: '', notes: '', voice_en: '', voice_es: '',
+  ask: ['address', 'motivation', 'timeline', 'condition', 'price', 'callback'], hours: 'Mon to Sat 9 am to 5 pm', transfer: '', notes: '', voice_en: '', voice_es: '',
 }
 export const voiceConfig = () => ({ ...VOICE_DEFAULT, ...(db.settings.voiceAgent || {}), company: orgName() || (db.settings.mailSender?.company) || 'I AM Real Estate' })
 let calls = []

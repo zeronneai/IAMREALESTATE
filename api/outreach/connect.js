@@ -1,6 +1,6 @@
 // POST /api/outreach/connect  (signed in admin)
 // Points the company's texting number (Settings > Texting number) at the portal inside Twilio:
-// incoming texts -> /api/outreach/inbound, incoming calls -> /api/voice/call. Returns what it found.
+// incoming texts -> /api/outreach/inbound, incoming calls -> /api/voice/call (and the end of each call -> /api/voice/call?status=1). Returns what it found.
 import { guard, body as readBody } from '../_lib/util.js'
 import { sb, e164 } from '../_lib/outreach.js'
 
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   const n = list.incoming_phone_numbers?.[0]
   if (!n) return res.status(404).json({ code: 'not_in_twilio', error: `${num} is not in the Twilio account yet. It appears once HighLevel finishes moving it.` })
   const host = req.headers['x-forwarded-host'] || req.headers.host
-  const form = new URLSearchParams({ SmsUrl: `https://${host}/api/outreach/inbound`, SmsMethod: 'POST', VoiceUrl: `https://${host}/api/voice/call`, VoiceMethod: 'POST', FriendlyName: 'I AM portal' })
+  const form = new URLSearchParams({ SmsUrl: `https://${host}/api/outreach/inbound`, SmsMethod: 'POST', VoiceUrl: `https://${host}/api/voice/call`, VoiceMethod: 'POST', StatusCallback: `https://${host}/api/voice/call?status=1`, StatusCallbackMethod: 'POST', FriendlyName: 'I AM portal' })
   const up = await fetch(`${base}/${n.sid}.json`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/x-www-form-urlencoded' }, body: form })
   const j = await up.json().catch(() => ({}))
   if (!up.ok) return res.status(502).json({ code: 'twilio', error: j.message || 'Twilio did not accept the change.' })

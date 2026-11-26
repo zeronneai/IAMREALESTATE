@@ -4,7 +4,7 @@ export const DEFAULT_AGENT = {
   greeting_en: 'Hi, thanks for calling {{company}}. This is {{name}}, the virtual assistant. Are you calling about a property you might want to sell?',
   greeting_es: 'Hola, gracias por llamar a {{company}}. Habla {{name}}, la asistente virtual. ¿Llama por una propiedad que le gustaría vender?',
   ask: ['address', 'motivation', 'timeline', 'condition', 'price', 'callback'],
-  hours: 'Mon to Fri 9am to 5pm', transfer: '', notes: '',
+  hours: 'Mon to Sat 9 am to 5 pm', transfer: '', notes: '',
 }
 const ASK = {
   address: 'the property address',

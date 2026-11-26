@@ -1169,3 +1169,6 @@ table.dt.acc tbody tr > td:first-child { box-shadow: inset 4px 0 0 var(--acc, tr
 .pill.cat i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 .pill.purple { background: rgba(139,92,246,.15); color: #a78bfa; }
 .map-legend label b { font-weight: 700; margin-left: 2px; }
+/* Phone calls inside Conversations */
+.bub.bub-call { border: 1px dashed rgba(212,168,67,.55); }
+.bub.bub-call a { color: inherit; text-decoration: underline; }

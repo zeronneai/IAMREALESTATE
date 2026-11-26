@@ -21,6 +21,11 @@ async function loadVoices(rerender) {
 }
 const voiceFor = (cfg, lang) => cart.state === 'ready' ? (cfg['voice_' + lang] || cart.voices.find(v => v.language.startsWith(lang))?.id || '') : ''
 
+// Office hours for incoming calls (default Monday to Saturday, 9 am to 5 pm). Outside them the AI answers.
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const ampm = h => h === 0 ? '12 am' : h < 12 ? h + ' am' : h === 12 ? '12 pm' : (h - 12) + ' pm'
+const office = c => ({ days: Array.isArray(c.office_days) && c.office_days.length ? c.office_days.map(Number) : [1, 2, 3, 4, 5, 6], open: c.office_open !== undefined && c.office_open !== '' ? +c.office_open : 9, close: c.office_close !== undefined && c.office_close !== '' ? +c.office_close : 17 })
+const hoursText = (days, o, c) => { const N = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], d = [...days].sort(); return `${d.length > 2 && d.every((x, i) => !i || x === d[i - 1] + 1) ? N[d[0]] + ' to ' + N[d[d.length - 1]] : d.map(x => N[x]).join(', ')} ${ampm(o)} to ${ampm(c)}` }
 const fill = (s, c) => String(s || '').replace(/\{\{(\w+)\}\}/g, (_, k) => c[k] ?? '')
 const mmss = s => `${Math.floor((s || 0) / 60)}:${String((s || 0) % 60).padStart(2, '0')}`
 
@@ -37,8 +42,12 @@ export function voiceView(el) {
         <div class="f"><label>${esc(t('va.asks'))}</label><div class="va-asks">${ASKS.map(a => `<label class="chk"><input type="checkbox" name="ask" value="${a}" ${c.ask.includes(a) ? 'checked' : ''}> ${esc(t('va.ask_' + a))}</label>`).join('')}</div></div>
         ${cart.state === 'ready' ? ['en', 'es'].map(l => `<div class="f"><label>${esc(t('va.voice_' + l))}</label><div class="ib-row"><select name="voice_${l}">${cart.voices.filter(v => v.language.startsWith(l)).map(v => `<option value="${esc(v.id)}" ${voiceFor(c, l) === v.id ? 'selected' : ''}>${esc(v.name)}${v.gender ? ' · ' + esc(v.gender) : ''}</option>`).join('')}</select><button type="button" class="btn sm ghost" data-hear="${l}" style="height:40px">${esc(t('va.hear'))}</button></div></div>`).join('')
           : `<div class="alert" style="font-size:12.5px">${esc(cart.state === 'loading' ? t('va.cart_loading') : t('va.cart_off'))}</div>`}
-        <div class="ib-row"><div class="f" style="flex:1"><label>${esc(t('va.hours'))}</label><input name="hours" value="${esc(c.hours)}"></div>
-          <div class="f" style="flex:1"><label>${esc(t('va.transfer'))}</label><input name="transfer" value="${esc(c.transfer)}" placeholder="(915) 555-0123"></div></div>
+        <div class="f"><label>${esc(t('va.hours'))}</label>
+          <div class="va-asks">${[1, 2, 3, 4, 5, 6, 0].map(d => `<label class="chk"><input type="checkbox" name="od" value="${d}" ${office(c).days.includes(d) ? 'checked' : ''}> ${esc(t('va.day' + d))}</label>`).join('')}</div>
+          <div class="ib-row" style="margin-top:6px"><select name="office_open" aria-label="${esc(t('va.open'))}">${HOURS.map(h => `<option value="${h}" ${office(c).open === h ? 'selected' : ''}>${esc(t('va.open'))} ${ampm(h)}</option>`).join('')}</select>
+            <select name="office_close" aria-label="${esc(t('va.close'))}">${HOURS.map(h => `<option value="${h}" ${office(c).close === h ? 'selected' : ''}>${esc(t('va.close'))} ${ampm(h)}</option>`).join('')}</select></div>
+          <small class="muted">${esc(t('va.hours_lead'))}</small></div>
+        <div class="f"><label>${esc(t('va.transfer'))}</label><input name="transfer" value="${esc(c.transfer)}" placeholder="(915) 555-0123"><small class="muted">${esc(t('va.transfer_lead'))}</small></div>
         <div class="va-sms"><label class="chk"><input type="checkbox" name="sms_on" ${c.sms_on === true || c.sms_on === 'on' ? 'checked' : ''}> <b>${esc(t('va.sms_on'))}</b></label>
           <small class="muted">${esc(t('va.sms_lead'))}</small>
           <div class="f"><label>${esc(t('va.sms_handoff'))}</label><input name="sms_handoff_hours" type="number" min="1" max="72" value="${esc(c.sms_handoff_hours || 12)}" style="max-width:120px"></div></div>
@@ -66,7 +75,8 @@ export function voiceView(el) {
   el.querySelector('[data-cfg]').onsubmit = async e => {
     e.preventDefault()
     const fd = new FormData(e.target)
-    const cfg = { ...Object.fromEntries([...fd].filter(([k]) => k !== 'ask')), ask: fd.getAll('ask'), sms_on: fd.get('sms_on') === 'on' }
+    const days = fd.getAll('od').map(Number), oo = +fd.get('office_open'), oc = +fd.get('office_close')
+    const cfg = { ...Object.fromEntries([...fd].filter(([k]) => k !== 'ask' && k !== 'od')), ask: fd.getAll('ask'), sms_on: fd.get('sms_on') === 'on', office_days: days, office_open: oo, office_close: oc, hours: hoursText(days, oo, oc) }
     await S.saveSettings({ voiceAgent: cfg }); toast(t('org.saved'))
   }
   el.querySelectorAll('[data-hear]').forEach(b => b.onclick = async () => {
@@ -191,7 +201,7 @@ async function hangUp(el) {
 }
 
 // ---------- call detail ----------
-function showCall(id) {
+export function showCall(id) {
   const x = S.voiceCalls().find(c => c.id === id); if (!x) return
   const d = x.data || {}, p = x.parcelId && S.parcel(x.parcelId)
   const rows = [['va.f_name', d.name], ['va.f_address', d.property_address], ['va.f_motivation', d.motivation], ['va.f_timeline', d.timeline], ['va.f_condition', d.condition], ['va.f_price', d.asking_price != null ? money(d.asking_price) : null], ['va.f_best', d.best_time], ['va.f_next', d.next_step]].filter(([, v]) => v)

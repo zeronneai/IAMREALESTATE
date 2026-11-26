@@ -5,6 +5,7 @@ import { esc, icon, toast, date } from '../ui.js'
 import { openDrawer } from '../drawer.js'
 import * as DNC from '../dnc.js'
 import { DEFAULT_SENDER, recipient } from '../mail.js'
+import { showCall } from './voice.js'
 
 let cur = null, unsub = null, draft = { channel: 'sms', to: '', subject: '', body: '' }
 
@@ -39,6 +40,7 @@ export function inbox(el) {
   unsub?.(); unsub = S.onChange(() => { if (document.body.contains(el)) paint(el, true); else { unsub?.(); unsub = null } })
   S.loadMessages().catch(() => {})
   S.loadPeople().catch(() => {})
+  S.loadVoiceCalls().catch(() => {})
   paint(el)
 }
 
@@ -60,7 +62,7 @@ function paint(el, soft = false) {
     return `<button class="ib-th ${x.key === cur ? 'on' : ''}" data-k="${esc(x.key)}">
       <div class="ib-top"><b>${esc(who)}</b><small>${esc(time(x.last.at))}</small></div>
       <div class="ib-sub">${esc(xp ? xp.address : xper ? t('ppl.k1_' + xper.kind) + (xper.stage ? ' · ' + xper.stage : '') : '')}</div>
-      <div class="ib-last">${x.last.dir === 'out' ? `<span class="dim">${esc(t('msg.you'))}: </span>` : ''}${esc(x.last.body.slice(0, 90))}${x.unread ? `<span class="ib-dot">${x.unread}</span>` : ''}</div>
+      <div class="ib-last">${x.last.dir === 'out' ? `<span class="dim">${esc(t('msg.you'))}: </span>` : ''}${x.last.kind === 'call' ? '📞 ' : ''}${esc(x.last.body.slice(0, 90))}${x.unread ? `<span class="ib-dot">${x.unread}</span>` : ''}</div>
     </button>` }).join('') || `<p class="muted" style="padding:16px">${esc(t('msg.empty'))}</p>`
 
   const { phones, emails } = contactsFor(p)
@@ -73,7 +75,12 @@ function paint(el, soft = false) {
   const sel = peers.find(x => x.v === draft.to)
   const tpls = (S.settings().smsTemplates?.[getLang()] || S.DEFAULT_SMS[getLang()])
 
-  const bubbles = (th?.items || []).map(m => `<div class="bub ${m.dir}">
+  const mmss = s => `${Math.floor((s || 0) / 60)}:${String((s || 0) % 60).padStart(2, '0')}`
+  const callBub = m => { const c = m.call, d = c.data || {}
+    return `<div class="bub ${m.dir} bub-call"><b class="bub-subj">📞 ${esc(t(m.dir === 'in' ? 'msg.call_in' : 'msg.call_out'))}${c.interest ? ` <span class="pill ${{ hot: 'bad', warm: 'gold', cold: '' }[c.interest] || ''}">${esc(t('va.int_' + c.interest))}</span>` : ''}</b>
+      <div>${esc(c.summary || '')}</div>${d.next_step ? `<div class="dim" style="margin-top:4px">→ ${esc(d.next_step)}</div>` : ''}
+      <small>${esc(time(m.at))} · ${mmss(c.duration)}${m.dir === 'in' ? ' · ' + esc(t(d.answered ? 'msg.call_team' : 'msg.call_ai')) : ''} · <a href="javascript:void 0" data-call="${esc(c.id)}">${esc(t('msg.call_view'))}</a></small></div>` }
+  const bubbles = (th?.items || []).map(m => m.kind === 'call' ? callBub(m) : `<div class="bub ${m.dir}">
       ${m.channel === 'email' && m.subject ? `<b class="bub-subj">${esc(m.subject)}</b>` : ''}<div>${esc(m.body).replace(/\n/g, '<br>')}</div>
       <small>${m.channel === 'email' ? '✉ ' : ''}${esc(time(m.at))}${m.dir === 'out' ? ' · ' + esc(t('msg.st_' + (m.status || 'sent')) !== 'msg.st_' + m.status ? t('msg.st_' + m.status) : m.status) : ''}${m.error ? ' · ' + esc(m.error) : ''}</small>
     </div>`).join('')
@@ -97,6 +104,7 @@ function paint(el, soft = false) {
     </section></div>`
 
   const ml = el.querySelector('[data-msgs]'); if (ml) ml.scrollTop = ml.scrollHeight
+  el.querySelectorAll('[data-call]').forEach(a => a.onclick = e => { e.preventDefault(); showCall(a.dataset.call) })
   el.querySelector('.ib-list').scrollTop = keepScroll
   el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { cur = b.dataset.k; draft = { channel: 'sms', to: '', subject: '', body: '' }; paint(el); S.markThreadRead(cur) })
   if (th?.unread && !document.hidden) S.markThreadRead(th.key)
