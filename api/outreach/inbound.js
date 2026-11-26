@@ -18,7 +18,10 @@ export default async function handler(req, res) {
     return empty()
   }
 
-  const to = e164(p.To), from = e164(p.From), text = String(p.Body || '').slice(0, 1600)
+  // Senders outside the US (e.g. a team member testing from Mexico) are saved too, but the AI reply is only
+  // stored in the portal, never texted back: our approved A2P campaign covers US numbers only.
+  const intl = !e164(p.From) && /^\+\d{8,15}$/.test(String(p.From || '').replace(/[^\d+]/g, ''))
+  const to = e164(p.To), from = e164(p.From) || (intl ? String(p.From).replace(/[^\d+]/g, '') : null), text = String(p.Body || '').slice(0, 1600)
   if (!to || !from) return empty()
   const orgRow = (await (await db.rest(`orgs?sms_number=eq.${encodeURIComponent(to)}&select=id,name,active`)).json())?.[0]
   const org = orgRow?.id
@@ -39,7 +42,8 @@ export default async function handler(req, res) {
     if (!opted?.length) {
       const r = await smsAgentReply({ org: orgRow, peer: from, text }).catch(e => { console.error('sms agent', e.message); return null })
       if (r?.reply) {
-        await db.rest('messages', { method: 'POST', body: JSON.stringify({ org_id: org, parcel_id: last?.parcel_id || null, channel: 'sms', direction: 'out', peer: from, body: r.reply, status: 'agent', read: true }) })
+        await db.rest('messages', { method: 'POST', body: JSON.stringify({ org_id: org, parcel_id: last?.parcel_id || null, channel: 'sms', direction: 'out', peer: from, body: r.reply, status: intl ? 'agent_test' : 'agent', read: true }) })
+        if (intl) return empty()
         return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>${xmlEscape(r.reply)}</Message></Response>`)
       }
     }
