@@ -140,4 +140,37 @@ async function alertTeam({ db, host, call, data }) {
   }
 }
 
+// The opening line of an incoming call (from the greeting in the settings).
+export function openingText(cfg, data = {}, lang = 'en') {
+  const fill = g => String(g || '').replace(/\{\{(\w+)\}\}/g, (_, k) => cfg[k] ?? '')
+  let t = fill(lang === 'es' ? cfg.greeting_es : cfg.greeting_en)
+  if (data.after_hours) t += lang === 'es' ? ' Ahorita la oficina está cerrada, pero con gusto le ayudo y le paso su mensaje al equipo.' : ' Our office is closed right now, but I can help you and pass your message to the team.'
+  if (data.auto_lang && lang === 'en') t += ' Para español, diga español o marque 2.'
+  return t
+}
+
+// Listen for the caller's answer (speech, and on the first turn of an incoming call also the 2 key for Spanish).
+export function gatherXml(id, lang, speech, dtmf = false) {
+  return `<Gather input="${dtmf ? 'speech dtmf" numDigits="1' : 'speech'}" language="${lang === 'es' ? 'es-MX' : 'en-US'}" speechTimeout="auto"${lang === 'en' ? ' speechModel="phone_call" enhanced="true"' : ''} actionOnEmptyResult="true" action="/api/voice/agent?id=${id}" method="POST">${speech}</Gather>`
+}
+
+// Audio cache in Supabase Storage (public bucket "voice-cache"): lines that repeat, like the greeting, are made
+// once by Cartesia and then Twilio plays the saved file directly, so the call is answered with no wait.
+export const audioKey = (text, voice, lang) => crypto.createHash('sha1').update(`${voice}|${lang}|${process.env.CARTESIA_MODEL || 'sonic-3.6'}|${text}`).digest('hex')
+export const audioUrl = (db, key) => `${db.url}/storage/v1/object/public/voice-cache/${key}.wav`
+export async function audioCached(db, key) {
+  const r = await fetch(audioUrl(db, key), { method: 'HEAD' }).catch(() => null)
+  return !!r?.ok
+}
+export async function audioStore(db, key, buf) {
+  const k = process.env.SUPABASE_SERVICE_ROLE_KEY, h = { apikey: k, Authorization: `Bearer ${k}` }
+  const put = () => fetch(`${db.url}/storage/v1/object/voice-cache/${key}.wav`, { method: 'POST', headers: { ...h, 'Content-Type': 'audio/wav', 'x-upsert': 'true' }, body: buf }).catch(() => null)
+  let r = await put()
+  if (!r?.ok) {
+    await fetch(`${db.url}/storage/v1/bucket`, { method: 'POST', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: 'voice-cache', name: 'voice-cache', public: true }) }).catch(() => null)
+    r = await put()
+  }
+  return !!r?.ok
+}
+
 export { sb }

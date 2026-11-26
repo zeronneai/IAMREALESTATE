@@ -3,7 +3,7 @@
 //   POST /api/voice/agent?id=<call>&status=1   when the call ends: duration, summary, follow up
 import { sb, twilioValid } from '../_lib/outreach.js'
 import { claude } from '../_lib/voice.js'
-import { callPrompt, speakXml, orgSettings, finishCall } from '../_lib/calls.js'
+import { callPrompt, speakXml, orgSettings, finishCall, openingText, gatherXml } from '../_lib/calls.js'
 
 export const config = { maxDuration: 30 }
 const MAX_TURNS = 40
@@ -46,15 +46,12 @@ export default async function handler(req, res) {
   const silences = (call.data?.silences || 0) + (silent ? 1 : 0)
 
   let reply = '', end = false, optout = false
-  const fillG = g => String(g || '').replace(/\{\{(\w+)\}\}/g, (_, k) => cfg[k] ?? '')
   // Incoming call: the first thing they hear is the greeting from the settings (no wait for the AI).
   if (call.source === 'phone' && !tr.length) {
-    reply = fillG(lang === 'es' ? cfg.greeting_es : cfg.greeting_en)
-    if (call.data?.after_hours) reply += lang === 'es' ? ' Ahorita la oficina está cerrada, pero con gusto le ayudo y le paso su mensaje al equipo.' : ' Our office is closed right now, but I can help you and pass your message to the team.'
-    if (call.data?.auto_lang && lang === 'en') reply += ' Para español, diga español o marque 2.'
+    reply = openingText(cfg, call.data || {}, lang)
   } else if (call.source === 'phone' && lang === 'en' && call.data?.auto_lang && (/^(2|\*)$/.test(String(p.Digits || '')) || /\b(espa[nñ]ol|spanish|en espa)/i.test(said))) {
     lang = 'es'
-    reply = fillG(cfg.greeting_es)
+    reply = openingText(cfg, {}, 'es')
   } else if (silent && silences >= 2) {
     reply = lang === 'es' ? 'Parece que no le escucho. Le dejo, que tenga buen día.' : "I can't hear you, so I'll let you go. Have a great day."
     end = true
@@ -79,6 +76,6 @@ export default async function handler(req, res) {
 
   const speech = speakXml(host, id, n, reply, lang)
   if (end) return res.status(200).send(twiml(`${speech}<Hangup/>`))
-  const gather = `<Gather input="${call.source === 'phone' && n === 0 && call.data?.auto_lang ? 'speech dtmf" numDigits="1' : 'speech'}" language="${lang === 'es' ? 'es-MX' : 'en-US'}" speechTimeout="auto"${lang === 'en' ? ' speechModel="phone_call" enhanced="true"' : ''} actionOnEmptyResult="true" action="/api/voice/agent?id=${id}" method="POST">${speech}</Gather>`
+  const gather = gatherXml(id, lang, speech, call.source === 'phone' && n === 0 && !!call.data?.auto_lang)
   return res.status(200).send(twiml(gather))
 }

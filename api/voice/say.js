@@ -1,7 +1,7 @@
 // GET /api/voice/say?id=<call>&n=<turn>&s=<signature>  The AI's words for one turn of a phone call, spoken by Cartesia.
 // Twilio fetches this link from <Play>. The signature makes the link work only for that call and turn.
 import { sb } from '../_lib/outreach.js'
-import { sign, orgSettings, pickVoice } from '../_lib/calls.js'
+import { sign, orgSettings, pickVoice, audioKey, audioStore } from '../_lib/calls.js'
 
 export default async function handler(req, res) {
   const id = String(req.query?.id || ''), n = String(req.query?.n || ''), s = String(req.query?.s || '')
@@ -21,7 +21,10 @@ export default async function handler(req, res) {
     body: JSON.stringify({ model_id: process.env.CARTESIA_MODEL || 'sonic-3.6', transcript: text, voice: { id: voice }, language: lang, output_format: { container: 'wav', encoding: 'pcm_s16le', sample_rate: 8000 } }),
   }).catch(() => null)
   if (!r || !r.ok) return res.status(502).end()
+  const buf = Buffer.from(await r.arrayBuffer())
+  // The opening line repeats on every call: save it so next time Twilio plays the file directly.
+  if (n === '0') await audioStore(db, audioKey(text, voice, lang), buf).catch(() => {})
   res.setHeader('Content-Type', 'audio/wav')
   res.setHeader('Cache-Control', 'private, max-age=600')
-  res.status(200).send(Buffer.from(await r.arrayBuffer()))
+  res.status(200).send(buf)
 }
