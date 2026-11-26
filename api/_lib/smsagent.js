@@ -37,6 +37,7 @@ Rules:
 - Only share homes and terms from the list below. Prices and terms can change and are confirmed by the team.
 - If they ask for a person, are upset, or the topic is outside the above, say a team member will reach out soon and add [HANDOFF] at the very end.
 - When you have the key details, thank them, say the team will contact them, and add [HANDOFF] at the very end.
+- If they show real interest (want to sell soon, have a sale or auction date, ask how much we would offer, want to see or buy a house now, or want a call), also add [HOT] at the very end.
 - Office hours: ${c.hours}.
 ${site ? `- Website with all homes: ${site}\n` : ''}${person ? `- You are talking to ${person.name}${person.kind ? ` (${person.kind})` : ''}.\n` : ''}${c.notes ? `Extra notes from the company: ${c.notes}\n` : ''}
 Homes for sale right now:
@@ -78,10 +79,10 @@ export async function smsAgentReply({ org, peer, text }) {
   const site = process.env.PUBLIC_SITE_URL || 'https://iamrealestate.vercel.app'
 
   let out = await claude({ system: smsSystemPrompt(c, { listings, person, site }), messages: msgs, max: 260 })
-  const handoff = /\[HANDOFF\]/i.test(out)
-  out = out.replace(/\[HANDOFF\]/gi, '').replace(/\[END\]/gi, '').replace(/[–—]/g, ',').trim()
+  const handoff = /\[HANDOFF\]/i.test(out), hot = /\[HOT\]/i.test(out)
+  out = out.replace(/\[(HANDOFF|HOT)\]/gi, '').replace(/\[END\]/gi, '').replace(/[–—]/g, ',').trim()
   if (!out) return null
-  return { reply: out.slice(0, 600), handoff }
+  return { reply: out.slice(0, 600), handoff, hot, person }
 }
 
 export const xmlEscape = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

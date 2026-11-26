@@ -1,5 +1,6 @@
 // Twilio webhook. Set it on each company number: "A message comes in" -> POST https://<portal>/api/outreach/inbound
 // Also receives delivery status updates (?status=1). Replies land in Conversations; STOP opts the number out.
+import { alertText } from '../_lib/calls.js'
 import { e164, STOP_WORDS, START_WORDS, sb, twilioValid, stopOnReply } from '../_lib/outreach.js'
 import { smsAgentReply, xmlEscape } from '../_lib/smsagent.js'
 
@@ -41,6 +42,12 @@ export default async function handler(req, res) {
     const opted = await (await db.rest(`opt_outs?org_id=eq.${org}&channel=eq.sms&peer=eq.${encodeURIComponent(from)}&select=peer`)).json().catch(() => [])
     if (!opted?.length) {
       const r = await smsAgentReply({ org: orgRow, peer: from, text }).catch(e => { console.error('sms agent', e.message); return null })
+      // Something that matters: Jarvis calls the team right away (8 am to 9 pm, once every 3 hours per person).
+      if (r && (r.hot || r.handoff)) {
+        const host = req.headers['x-forwarded-host'] || req.headers.host
+        const addr = last?.parcel_id ? (await (await db.rest(`parcels?id=eq.${last.parcel_id}&select=address`)).json().catch(() => []))?.[0]?.address : null
+        await alertText({ db, host, orgId: org, peer: from, text, reply: r.reply, who: r.person?.name, address: addr, asked: r.handoff && !r.hot }).catch(e => console.error('jarvis text alert', e.message))
+      }
       if (r?.reply) {
         await db.rest('messages', { method: 'POST', body: JSON.stringify({ org_id: org, parcel_id: last?.parcel_id || null, channel: 'sms', direction: 'out', peer: from, body: r.reply, status: intl ? 'agent_test' : 'agent', read: true }) })
         if (intl) return empty()

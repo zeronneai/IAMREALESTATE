@@ -126,18 +126,38 @@ export async function finishCall({ db, host, call, p }) {
   }
   if (call.source === 'phone' && call.data?.answered) done.reviewed = true
   await db.rest(`voice_calls?id=eq.${call.id}`, { method: 'PATCH', body: JSON.stringify(done) })
-  if (call.source === 'phone' && data && (data.interest === 'hot' || data.wants_human) && !data.do_not_contact) await alertTeam({ db, host, call, data }).catch(e => console.error('jarvis alert', e.message))
+  if (call.source === 'phone' && data && (data.interest === 'hot' || data.wants_human) && !data.do_not_contact) await alertCall({ db, host, call, data }).catch(e => console.error('jarvis alert', e.message))
 }
 
 // Jarvis calls the team members who turned on Jarvis calls (8 am to 9 pm El Paso time).
-async function alertTeam({ db, host, call, data }) {
-  const h = localHour(); if (h < 8 || h >= 21) return
-  const team = await (await db.rest(`team_members?org_id=eq.${call.org_id}&jarvis_call=is.true&phone=not.is.null&role=in.(admin,agent)&select=full_name,email,phone,call_lang`)).json().catch(() => [])
-  const who = data.name || 'A caller', num = String(call.phone || '').replace(/^\+1/, '')
-  const brief = [`- ${who} just called the company line${num ? ' from ' + num.split('').join(' ') : ''}.`, data.property_address && `- Property: ${data.property_address}.`, data.motivation && `- Why: ${data.motivation}.`, data.timeline && `- Timeline: ${data.timeline}.`, data.best_time && `- Best time to call back: ${data.best_time}.`, data.wants_human && '- They asked to talk to a person.', data.next_step && `- Next step: ${data.next_step}`, '- The full call is in the portal, under Conversations and AI calls.'].filter(Boolean).join('\n')
-  for (const m of (Array.isArray(team) ? team : []).slice(0, 3)) {
-    await placeCall({ db, host, orgId: call.org_id, to: m.phone, source: 'jarvis', lang: m.call_lang === 'es' ? 'es' : 'en', data: { name: m.full_name || m.email, reason: data.wants_human ? 'A caller asked to talk to a person.' : 'A hot lead just called the company line.', brief } })
+// Once per person who reached out every 3 hours, so a long chat does not ring the team again and again.
+export async function alertTeam({ db, host, orgId, peer, reason, brief }) {
+  const h = localHour(); if (h < 8 || h >= 21) return 0
+  if (peer) {
+    const since = new Date(Date.now() - 3 * 3600e3).toISOString()
+    const recent = await (await db.rest(`voice_calls?org_id=eq.${orgId}&source=eq.jarvis&data->>peer=eq.${encodeURIComponent(peer)}&started_at=gt.${encodeURIComponent(since)}&select=id&limit=1`)).json().catch(() => [])
+    if (Array.isArray(recent) && recent.length) return 0
   }
+  const team = await (await db.rest(`team_members?org_id=eq.${orgId}&jarvis_call=is.true&phone=not.is.null&role=in.(admin,agent)&select=full_name,email,phone,call_lang`)).json().catch(() => [])
+  let n = 0
+  for (const m of (Array.isArray(team) ? team : []).slice(0, 3)) {
+    const r = await placeCall({ db, host, orgId, to: m.phone, source: 'jarvis', lang: m.call_lang === 'es' ? 'es' : 'en', data: { name: m.full_name || m.email, reason, brief, peer: peer || null } })
+    if (r.ok) n++
+  }
+  return n
+}
+const spell = v => String(v || '').replace(/^\+1/, '').split('').join(' ')
+
+async function alertCall({ db, host, call, data }) {
+  const who = data.name || 'A caller'
+  const brief = [`- ${who} just called the company line${call.phone ? ' from ' + spell(call.phone) : ''}.`, data.property_address && `- Property: ${data.property_address}.`, data.motivation && `- Why: ${data.motivation}.`, data.timeline && `- Timeline: ${data.timeline}.`, data.best_time && `- Best time to call back: ${data.best_time}.`, data.wants_human && '- They asked to talk to a person.', data.next_step && `- Next step: ${data.next_step}`, '- The full call is in the portal, under Conversations and AI calls.'].filter(Boolean).join('\n')
+  return alertTeam({ db, host, orgId: call.org_id, peer: call.phone, reason: data.wants_human ? 'A caller asked to talk to a person.' : 'A hot lead just called the company line.', brief })
+}
+
+// A text that matters (the AI marked it hot, or the person asked for someone from the team): Jarvis calls the team.
+export async function alertText({ db, host, orgId, peer, text, reply, who, address, asked }) {
+  const brief = [`- ${who || 'Someone'} just texted the company number${peer ? ' from ' + spell(peer) : ''}${address ? ', about ' + address : ''}.`, `- They wrote: ${String(text).slice(0, 300)}`, reply && `- The AI answered: ${String(reply).slice(0, 300)}`, asked && '- They want someone from the team to reach out.', '- The whole chat is in the portal, under Conversations.'].filter(Boolean).join('\n')
+  return alertTeam({ db, host, orgId, peer, reason: asked ? 'Someone who texted wants to talk to the team.' : 'A hot lead just texted the company number.', brief })
 }
 
 // The opening line of an incoming call (from the greeting in the settings).
