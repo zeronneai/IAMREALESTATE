@@ -7,7 +7,7 @@ import { parseRentRedi, matchRent } from '../parse/rentredi.js'
 const SITS = ['normal', 'payment_plan', 'eviction', 'foreclosure', 'vacant', 'disconnected']
 
 const KINDS = ['rent', 'mortgage', 'wrap', 'loan', 'tax', 'insurance', 'hoa', 'utility', 'repair', 'other']
-const METHODS = ['ACH', 'Zelle', 'Check', 'Card', 'Cash', 'RentRedi', 'Autopay', 'Wire']
+const METHODS = ['ACH', 'Zelle', 'Check', 'Card', 'Cash', 'RentRedi', 'Stripe (card)', 'Stripe (bank)', 'Autopay', 'Wire']
 let month = S.monthStart()
 const shiftMonth = (p, k) => { const d = new Date(+p.slice(0, 4), +p.slice(5, 7) - 1 + k, 1); return S.monthStart(d) }
 const monthName = p => new Date(+p.slice(0, 4), +p.slice(5, 7) - 1, 1).toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'long', year: 'numeric' })
@@ -138,6 +138,8 @@ export function payModal(it, done) {
   modal(`<h3>${esc(inbound ? t('pf.mark_received') : t('pf.mark_paid'))}</h3>
     <p class="muted" style="margin:0">${esc(what(it))}${it.inv ? ' · ' + esc(it.inv.address) : ''} · ${esc(t('pf.due'))} ${esc(date(it.due))} ${pill(it)}</p>
     ${it.ob.payUrl && !inbound ? `<a class="btn sm" href="${esc(it.ob.payUrl)}" target="_blank" rel="noopener">${esc(t('pf.open_pay'))} ↗</a>` : ''}
+    ${inbound && !it.pay ? `<div class="paylink"><b>💳 ${esc(t('pay.title'))}</b><span class="muted">${esc(t('pay.lead'))}</span>
+      <div class="ib-row"><button type="button" class="btn sm gold" data-plcopy>${esc(t('pay.copy'))}</button><input data-plphone placeholder="${esc(t('pay.phone_ph'))}" style="flex:1;min-width:140px"><button type="button" class="btn sm" data-plsms>${esc(t('pay.sms'))}</button></div></div>` : ''}
     <form class="form-grid" data-pay>
       <div class="f"><label>${esc(inbound ? t('pf.amount_received') : t('pf.amount_paid'))}</label><input name="paid" type="number" step="0.01" value="${esc(p.paid ?? it.amount)}" required></div>
       <div class="f"><label>${esc(t('pf.paid_on'))}</label><input name="paidOn" type="date" value="${esc(p.paidOn || new Date().toISOString().slice(0, 10))}"></div>
@@ -149,6 +151,15 @@ export function payModal(it, done) {
         <span style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('org.save'))}</button></span></div>
     </form>`, (box, close) => {
     const f = box.querySelector('[data-pay]')
+    const link = async () => { try { return await S.payLink(it.ob) } catch (err) { toast(err.message); return null } }
+    box.querySelector('[data-plcopy]')?.addEventListener('click', async () => { const u = await link(); if (!u) return; try { await navigator.clipboard.writeText(u); toast(t('pay.copied')) } catch { prompt(t('pay.copy'), u) } })
+    box.querySelector('[data-plsms]')?.addEventListener('click', async () => {
+      const to = box.querySelector('[data-plphone]').value.trim(); if (!to) return toast(t('pay.phone_need'))
+      const u = await link(); if (!u) return
+      const first = String(it.ob.party || '').split(/\s+/)[0]
+      const body = t('pay.sms_body').replace('{name}', first ? ' ' + first : '').replace('{what}', what(it)).replace('{amount}', money(it.amount)).replace('{date}', date(it.due)).replace('{url}', u)
+      try { await S.sendMessage({ parcelId: it.inv?.parcelId || null, channel: 'sms', to, body }); toast(t('pay.sent')) } catch (err) { toast(err.message) }
+    })
     box.querySelector('[data-undo]')?.addEventListener('click', async () => { await S.undoPayment(it); close(); done() })
     box.querySelector('[data-waive]')?.addEventListener('click', async () => { await S.recordPayment(it, { paid: 0, status: 'waived', paidOn: new Date().toISOString().slice(0, 10), notes: f.notes.value }); close(); done() })
     f.onsubmit = async e => { e.preventDefault(); try { await S.recordPayment(it, Object.fromEntries(new FormData(f))); close(); toast(inbound ? t('pf.saved_in') : t('pf.saved_out')); done() } catch (err) { toast(err.message) } }

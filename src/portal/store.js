@@ -837,7 +837,7 @@ export async function reverseGeocode(lat, lng) {
 
 // ---------- portfolio & finance: recurring payments and what was paid ----------
 let obls = [], pays = []
-const oblRow = r => ({ id: r.id, invId: r.inventory_id, kind: r.kind, dir: r.direction, party: r.party || '', amount: +r.amount || 0, freq: r.frequency, dueDay: r.due_day, dueDate: r.due_date, grace: r.grace_days ?? 5, autopay: !!r.autopay, account: r.account || '', payUrl: r.pay_url || '', active: r.active !== false, notes: r.notes || '', lien: r.lien || 1, unit: r.unit || '', situation: r.situation || 'normal', extRef: r.ext_ref || '', label: r.label || '' })
+const oblRow = r => ({ id: r.id, invId: r.inventory_id, kind: r.kind, dir: r.direction, party: r.party || '', amount: +r.amount || 0, freq: r.frequency, dueDay: r.due_day, dueDate: r.due_date, grace: r.grace_days ?? 5, autopay: !!r.autopay, account: r.account || '', payUrl: r.pay_url || '', active: r.active !== false, notes: r.notes || '', lien: r.lien || 1, unit: r.unit || '', situation: r.situation || 'normal', extRef: r.ext_ref || '', label: r.label || '', payToken: r.pay_token || '' })
 export const IN_KINDS = ['rent', 'wrap', 'loan']
 export const dirOf = kind => (IN_KINDS.includes(kind) ? 'in' : 'out')
 const payRow = r => ({ id: r.id, oblId: r.obligation_id, period: r.period, dueDate: r.due_date, amountDue: +r.amount_due || 0, paid: +r.amount_paid || 0, lateFee: +r.late_fee || 0, paidOn: r.paid_on, method: r.method || '', reference: r.reference || '', status: r.status, notes: r.notes || '' })
@@ -957,6 +957,22 @@ export async function recordPayment(it, f) {
   const { error } = await sb.from('payments').upsert(row, { onConflict: 'obligation_id,period' })
   if (error) throw new Error(/relation|schema cache/i.test(error.message) ? t('pf.e_sql') : t('team.e_error'))
   await loadFinance()
+}
+// Private pay link for something a tenant or buyer pays (rent, wrap, loan): /pay/?t=<token>, paid on Stripe.
+export async function payLink(ob) {
+  let tok = ob.payToken
+  if (!tok) {
+    const b = crypto.getRandomValues(new Uint8Array(18))
+    tok = btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    if (sb && isUuid(ob.id)) {
+      const { error } = await sb.from('obligations').update({ pay_token: tok }).eq('id', ob.id)
+      if (error) throw new Error(/column|schema cache/i.test(error.message) ? t('pay.e_sql') : t('team.e_error'))
+    }
+    ob.payToken = tok
+    const live = obligations().find(x => x.id === ob.id); if (live) live.payToken = tok
+    persist()
+  }
+  return `${location.origin}/pay/?t=${tok}`
 }
 export async function undoPayment(it) {
   if (!it.pay) return

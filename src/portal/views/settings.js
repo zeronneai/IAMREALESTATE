@@ -76,6 +76,7 @@ export async function settingsView(el) {
           </div>
           <div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn gold">${esc(t('team.add'))}</button></div>
         </form></div>` : ''}
+      ${admin ? `<div class="card fade-in" id="stripecard"><h3>💳 ${esc(t('pay.set_title'))}<span class="r pill" data-stripe>…</span></h3><p class="lead">${esc(t('pay.set_lead'))}</p><ol class="muted" style="margin:0;padding-left:18px;font-size:13px;line-height:1.6">${t('pay.set_steps').split('|').map(x => `<li>${esc(x)}</li>`).join('')}</ol><p class="muted mono" style="font-size:12px;margin:8px 0 0">${esc(location.origin)}/api/pay/webhook</p></div>` : ''}
       <div class="card fade-in"><h3>${esc(t('dnc.title'))}<span class="r pill ${dm?.count ? 'ok' : ''}">${(dm?.count || 0).toLocaleString()} ${esc(t('dnc.numbers'))}</span></h3>
         <p class="lead">${esc(t('dnc.hint'))}</p>
         <div class="drop" id="dncdrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('dnc.import'))}</b></div><p>TXT · CSV</p></div>
@@ -138,6 +139,7 @@ export async function settingsView(el) {
     for (const line of String(new FormData(e.target).get('psf') || '').split(/\n/)) { const m = line.match(/^\s*(\d{5}|default)\s*[=:,]\s*([\d.]+)/i); if (m) map[m[1].toLowerCase()] = +m[2] }
     S.saveSettings({ psfByZip: map }); toast(t('s.saved'))
   })
+  fetch('/api/pay/status').then(r => r.json()).then(j => { const b = el.querySelector('[data-stripe]'); if (!b) return; b.textContent = j.ready ? (j.mode === 'live' ? t('pay.st_live') : t('pay.st_test')) + (j.webhook ? '' : ' · ' + t('pay.st_nohook')) : t('pay.st_off'); b.className = 'r pill ' + (j.ready && j.webhook ? 'ok' : 'warn') }).catch(() => {})
   el.querySelector('[data-reset]')?.addEventListener('click', () => { S.resetDemo(); toast(t('s.saved')) })
   // do not call
   dropzone(el.querySelector('#dncdrop'), async files => { const r = await DNC.importFile(files[0]); toast(`+${r.added.toLocaleString()} · ${r.total.toLocaleString()} ${t('dnc.numbers')}`); settingsView(el) }, { multiple: false, accept: '.txt,.csv,text/plain,text/csv' })
