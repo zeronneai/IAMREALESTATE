@@ -29,7 +29,8 @@ export default async function handler(req, res) {
   if (prev?.stripe_ref && String(prev.stripe_ref).includes(s.id)) return res.status(200).json({ ok: true, duplicate: true })
   const got = Math.round((s.amount_total || 0)) / 100
   const paid = Math.round(((+prev?.amount_paid || 0) + got) * 100) / 100
-  const ach = (s.payment_method_types || []).length === 1 ? s.payment_method_types[0] === 'us_bank_account' : ev.type === 'checkout.session.async_payment_succeeded'
+  // Bank (ACH) payments finish later with async_payment_succeeded; card payments are paid at completion.
+  const ach = ev.type === 'checkout.session.async_payment_succeeded'
   const row = {
     org_id: ob.org_id, obligation_id: ob.id, period: md.period, due_date: md.due || prev?.due_date || null, amount_due: +ob.amount || got,
     amount_paid: paid, paid_on: new Date().toISOString().slice(0, 10), method: ach ? 'Stripe (bank)' : 'Stripe (card)',

@@ -27,7 +27,8 @@ export default async function handler(req, res) {
   try {
     const s = await stripe('checkout/sessions', {
       mode: 'payment',
-      payment_method_types: ['card', 'us_bank_account'],
+      // Newer Stripe API: allowed_payment_method_types (card covers Apple Pay and Google Pay).
+      allowed_payment_method_types: ['card', 'us_bank_account'],
       line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: Math.round(amount * 100), product_data: { name: what.slice(0, 250) } } }],
       // Embedded: the Stripe payment form shows inside our own pay page (logo, colors), not on a Stripe page.
       ui_mode: 'embedded', return_url: back + '&ok=1&session_id={CHECKOUT_SESSION_ID}',
