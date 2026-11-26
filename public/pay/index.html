@@ -38,10 +38,10 @@
   <main class="card" id="app"><img class="logo" src="/img/iam-logo.png" alt="I AM Real Estate" /><p class="sub" id="loading">Loading…</p></main>
   <script>
     const T = {
-      en: { title: 'Make a payment', due: 'Amount due', for: 'For', home: 'Home', month: 'Month', dueOn: 'Due date', email: 'Email for your receipt (optional)', pay: 'Pay securely', paying: 'Opening secure payment…', note: 'Card or bank account (ACH). Payments are processed securely by Stripe. Bank payments take 3 to 5 business days to clear.', none: 'You are all caught up. There is nothing due right now.', thanks: 'Thank you! Your payment was received.', thanksNote: 'You will get a receipt by email. Card payments post right away; bank payments when they clear.', bad: 'This payment link is not valid. Please contact us.', soon: 'Online payments are not active yet. Please contact us to pay.', fail: 'We could not open the payment page. Please try again.', hi: 'Hi', call: 'Questions? Text or call', other: 'Pay a different amount', otherPh: 'Amount', max: 'Up to', badAmt: 'Write an amount between $1 and', back: 'Change amount' },
-      es: { title: 'Hacer un pago', due: 'Monto a pagar', for: 'Concepto', home: 'Casa', month: 'Mes', dueOn: 'Fecha límite', email: 'Correo para tu recibo (opcional)', pay: 'Pagar de forma segura', paying: 'Abriendo el pago seguro…', note: 'Tarjeta o cuenta bancaria (ACH). Los pagos se procesan de forma segura con Stripe. Los pagos bancarios tardan de 3 a 5 días hábiles en reflejarse.', none: 'Estás al corriente. No hay nada pendiente por ahora.', thanks: '¡Gracias! Recibimos tu pago.', thanksNote: 'Te llegará un recibo por correo. Los pagos con tarjeta se registran de inmediato; los bancarios cuando se reflejan.', bad: 'Este link de pago no es válido. Por favor contáctanos.', soon: 'Los pagos en línea todavía no están activos. Contáctanos para pagar.', fail: 'No pudimos abrir la página de pago. Intenta de nuevo.', hi: 'Hola', call: '¿Dudas? Mándanos texto o llama al', other: 'Pagar otra cantidad', otherPh: 'Cantidad', max: 'Hasta', badAmt: 'Escribe una cantidad entre $1 y', back: 'Cambiar cantidad' },
+      en: { title: 'Make a payment', due: 'Amount due', for: 'For', home: 'Home', month: 'Month', dueOn: 'Due date', date: 'Date', email: 'Email for your receipt (optional)', pay: 'Pay securely', paying: 'Opening secure payment…', note: 'Card or bank account (ACH). Payments are processed securely by Stripe. Bank payments take 3 to 5 business days to clear.', none: 'You are all caught up. There is nothing due right now.', thanks: 'Thank you! Your payment was received.', thanksNote: 'You will get a receipt by email. Card payments post right away; bank payments when they clear.', bad: 'This payment link is not valid. Please contact us.', soon: 'Online payments are not active yet. Please contact us to pay.', fail: 'We could not open the payment page. Please try again.', hi: 'Hi', call: 'Questions? Text or call', webTitle: 'Make a payment', webLead: 'Pay rent, a home payment, a deposit or any amount you agreed with us.', yourName: 'Your full name', email2: 'Email (for your receipt)', phone2: 'Cell phone', addr: 'Property address (optional)', amount: 'Amount (USD)', between: 'Between', and: 'and', need: 'Please write your name, the reference and the amount.', off: 'Online payments are not available right now. Please contact us.', other: 'Pay a different amount', otherPh: 'Amount', max: 'Up to', badAmt: 'Write an amount between $1 and', back: 'Change amount' },
+      es: { title: 'Hacer un pago', due: 'Monto a pagar', for: 'Concepto', home: 'Casa', month: 'Mes', dueOn: 'Fecha límite', date: 'Fecha', email: 'Correo para tu recibo (opcional)', pay: 'Pagar de forma segura', paying: 'Abriendo el pago seguro…', note: 'Tarjeta o cuenta bancaria (ACH). Los pagos se procesan de forma segura con Stripe. Los pagos bancarios tardan de 3 a 5 días hábiles en reflejarse.', none: 'Estás al corriente. No hay nada pendiente por ahora.', thanks: '¡Gracias! Recibimos tu pago.', thanksNote: 'Te llegará un recibo por correo. Los pagos con tarjeta se registran de inmediato; los bancarios cuando se reflejan.', bad: 'Este link de pago no es válido. Por favor contáctanos.', soon: 'Los pagos en línea todavía no están activos. Contáctanos para pagar.', fail: 'No pudimos abrir la página de pago. Intenta de nuevo.', hi: 'Hola', call: '¿Dudas? Mándanos texto o llama al', webTitle: 'Hacer un pago', webLead: 'Paga tu renta, el pago de tu casa, un depósito o cualquier monto que acordaste con nosotros.', yourName: 'Tu nombre completo', email2: 'Correo (para tu recibo)', phone2: 'Celular', addr: 'Dirección de la casa (opcional)', amount: 'Monto (USD)', between: 'Entre', and: 'y', need: 'Escribe tu nombre, la referencia y el monto.', off: 'Los pagos en línea no están disponibles ahorita. Contáctanos.', other: 'Pagar otra cantidad', otherPh: 'Cantidad', max: 'Hasta', badAmt: 'Escribe una cantidad entre $1 y', back: 'Cambiar cantidad' },
     }
-    const q = new URLSearchParams(location.search), token = q.get('t') || ''
+    const q = new URLSearchParams(location.search), token = q.get('t') || '', web = !token
     let lang = (q.get('lang') || navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en', info = null, err = null
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
     const money = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -55,6 +55,37 @@
       document.documentElement.lang = lang
       const logo = '<img class="logo" src="/img/iam-logo.png" alt="I AM Real Estate" />'
       const contact = info?.phone ? `<p class="note">${esc(L.call)} ${esc(phone(info.phone))}</p>` : ''
+      if (web && !err) {
+        if (!info) return
+        if (q.get('ok') === '1') { app.innerHTML = logo + `<div class="ok"><div class="big">✅</div><h1>${esc(L.thanks)}</h1><p class="sub">${esc(L.thanksNote)}</p></div>` + contact; return }
+        if (!info.on || !info.ready) { app.innerHTML = logo + `<h1>${esc(L.webTitle)}</h1><p class="err">${esc(info.ready ? L.off : L.soon)}</p>` + contact; return }
+        const note = lang === 'es' ? info.note_es : info.note_en
+        app.innerHTML = logo + `<h1>${esc(L.webTitle)}</h1><p class="sub">${esc(info.company)} · ${esc(L.webLead)}</p>${note ? `<p class="sub">${esc(note)}</p>` : ''}
+          <div id="pre"><label for="nm">${esc(L.yourName)}</label><input id="nm" autocomplete="name" maxlength="80" />
+          <label for="rf">${esc(lang === 'es' ? info.ref_es : info.ref_en)}</label><input id="rf" maxlength="120" />
+          <label for="ad">${esc(L.addr)}</label><input id="ad" autocomplete="street-address" maxlength="120" />
+          <label for="amt">${esc(L.amount)} · ${esc(L.between)} ${esc(money(info.min))} ${esc(L.and)} ${esc(money(info.max))}</label><input id="amt" type="number" inputmode="decimal" min="${info.min}" max="${info.max}" step="0.01" placeholder="0.00" />
+          <label for="em">${esc(L.email2)}</label><input id="em" type="email" autocomplete="email" maxlength="120" />
+          <label for="ph">${esc(L.phone2)}</label><input id="ph" type="tel" autocomplete="tel" maxlength="30" />
+          <button id="go" type="button">${esc(L.pay)}</button></div><div id="checkout"></div><p class="note">${esc(L.note)}</p>` + contact
+        const go = document.getElementById('go'), v = id => document.getElementById(id).value.trim()
+        document.getElementById('amt').oninput = () => { const a = parseFloat(v('amt')); go.textContent = a > 0 ? `${L.pay} · ${money(a)}` : L.pay }
+        go.onclick = async () => {
+          const a = parseFloat(v('amt'))
+          if (!v('nm') || !v('rf') || !(a > 0)) { alert(L.need); return }
+          if (a < info.min || a > info.max) { alert(`${L.between} ${money(info.min)} ${L.and} ${money(info.max)}`); return }
+          go.disabled = true; go.textContent = L.paying
+          try {
+            const r = await fetch('/api/pay/web', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: v('nm'), reference: v('rf'), address: v('ad'), amount: a, email: v('em'), phone: v('ph') }) })
+            const j = await r.json(); if (!j.client_secret) throw new Error(j.detail || j.error || 'fail')
+            await loadStripe()
+            const st = window.Stripe(info.pk, { locale: lang }), opts = { fetchClientSecret: async () => j.client_secret }
+            const checkout = st.createEmbeddedCheckoutPage ? await st.createEmbeddedCheckoutPage(opts) : await st.initEmbeddedCheckout(opts)
+            document.getElementById('pre').hidden = true; checkout.mount('#checkout')
+          } catch (e) { go.disabled = false; go.textContent = L.pay; alert(L.fail + (e?.message && e.message !== 'fail' ? '\n\n' + e.message : '')) }
+        }
+        return
+      }
       if (err) { app.innerHTML = logo + `<p class="err">${esc(L[err] || L.bad)}</p>`; return }
       if (!info) return
       if (q.get('ok') === '1') { app.innerHTML = logo + `<div class="ok"><div class="big">✅</div><h1>${esc(L.thanks)}</h1><p class="sub">${esc(L.thanksNote)}</p></div>` + contact; return }
@@ -64,8 +95,8 @@
         <p class="sub" style="margin:0">${esc(L.due)}</p><div class="amt">${esc(money(info.amount))}</div>
         <div style="margin-top:14px"><div class="row"><span>${esc(L.for)}</span><span>${esc(what)}</span></div>
         ${info.home ? `<div class="row"><span>${esc(L.home)}</span><span>${esc(info.home)}${info.unit ? ' #' + esc(info.unit) : ''}</span></div>` : ''}
-        <div class="row"><span>${esc(L.month)}</span><span>${esc(fmtMonth(info.period))}</span></div>
-        ${info.due ? `<div class="row"><span>${esc(L.dueOn)}</span><span>${esc(fmtDate(info.due))}</span></div>` : ''}</div>
+        ${info.once ? '' : `<div class="row"><span>${esc(L.month)}</span><span>${esc(fmtMonth(info.period))}</span></div>`}
+        ${info.due ? `<div class="row"><span>${esc(info.once ? L.date : L.dueOn)}</span><span>${esc(fmtDate(info.due))}</span></div>` : ''}</div>
         ${info.ready ? `<div id="pre">${info.other_amount ? `<label class="chk"><input type="checkbox" id="oth"> ${esc(L.other)}</label><div id="othbox" hidden><label for="amt">${esc(L.otherPh)} (${esc(L.max)} ${esc(money(info.amount))})</label><input id="amt" type="number" inputmode="decimal" min="1" step="0.01" max="${info.amount}" placeholder="0.00" /></div>` : ''}
         <label for="em">${esc(L.email)}</label><input id="em" type="email" autocomplete="email" inputmode="email" />
         <button id="go" type="button">${esc(L.pay)} · ${esc(money(info.amount))}</button></div><div id="checkout"></div><p class="note">${esc(L.note)}</p>` : `<p class="err" style="margin-top:18px">${esc(L.soon)}</p>`}` + contact
@@ -94,7 +125,7 @@
     let stripeLoading = null
     const loadStripe = () => stripeLoading || (stripeLoading = new Promise((ok, no) => { if (window.Stripe) return ok(); const sc = document.createElement('script'); sc.src = 'https://js.stripe.com/endive/stripe.js'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc) }))
     document.getElementById('lang').onclick = () => { lang = lang === 'es' ? 'en' : 'es'; paint() }
-    if (!token) { err = 'bad'; paint() }
+    if (web) fetch('/api/pay/web').then(r => r.ok ? r.json() : Promise.reject()).then(j => { info = j; paint() }).catch(() => { err = 'bad'; paint() })
     else fetch('/api/pay/info?t=' + encodeURIComponent(token)).then(r => r.ok ? r.json() : Promise.reject()).then(j => { info = j; paint() }).catch(() => { err = 'bad'; paint() })
   </script>
 </body>

@@ -21,8 +21,22 @@ export default async function handler(req, res) {
   const s = ev?.data?.object || {}
   const md = s.metadata || {}
   const paidNow = (ev.type === 'checkout.session.completed' && s.payment_status === 'paid') || ev.type === 'checkout.session.async_payment_succeeded'
-  if (!paidNow || !md.obligation_id || !md.period) return res.status(200).json({ ok: true, skipped: ev.type })
+  if (!paidNow) return res.status(200).json({ ok: true, skipped: ev.type })
   const db = sb(); if (!db.ok) return res.status(500).end()
+  // Website payment (no pay link): save it as a one-time item received, with who paid and their reference.
+  if (md.web === '1' && md.org_id) {
+    const dup = (await (await db.rest(`payments?stripe_ref=like.*${encodeURIComponent(s.id)}*&select=id&limit=1`)).json().catch(() => []))
+    if (Array.isArray(dup) && dup.length) return res.status(200).json({ ok: true, duplicate: true })
+    const got = Math.round(s.amount_total || 0) / 100, today = new Date().toISOString().slice(0, 10)
+    const contact = [md.phone, md.email || s.customer_details?.email, md.address].filter(Boolean).join(' · ')
+    const ins = await db.rest('obligations', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ org_id: md.org_id, kind: 'other', direction: 'in', party: md.name || s.customer_details?.name || null, amount: got, frequency: 'once', due_date: today, grace_days: 0, active: true, label: `Web payment: ${md.ref || ''}`.slice(0, 120), notes: `Paid on the website${contact ? ' · ' + contact : ''}`.slice(0, 500) }) })
+    const obId = (await ins.json().catch(() => []))?.[0]?.id
+    if (!obId) { console.error('web payment obligation', ins.status); return res.status(500).end() }
+    const r = await db.rest('payments', { method: 'POST', body: JSON.stringify({ org_id: md.org_id, obligation_id: obId, period: today.slice(0, 8) + '01', due_date: today, amount_due: got, amount_paid: got, paid_on: today, method: ev.type === 'checkout.session.async_payment_succeeded' ? 'Stripe (bank)' : 'Stripe (card)', reference: String(s.payment_intent || s.id).slice(0, 200), status: 'paid', notes: `Website payment · ${md.ref || ''}`.slice(0, 500), stripe_ref: s.id }) })
+    if (!r.ok) { console.error('web payment save', await r.text()); return res.status(500).end() }
+    return res.status(200).json({ ok: true, web: true })
+  }
+  if (!md.obligation_id || !md.period) return res.status(200).json({ ok: true, skipped: 'no_obligation' })
   const ob = (await (await db.rest(`obligations?id=eq.${encodeURIComponent(md.obligation_id)}&select=id,org_id,amount`)).json().catch(() => []))?.[0]
   if (!ob) return res.status(200).json({ ok: true, skipped: 'unknown_obligation' })
   const prev = (await (await db.rest(`payments?obligation_id=eq.${ob.id}&period=eq.${md.period}&select=*`)).json().catch(() => []))?.[0]

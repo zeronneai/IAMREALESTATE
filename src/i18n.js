@@ -9,6 +9,7 @@ export const dict = {
   'nav.manage': ['Manage & Rent', 'Administrar y Rentar'],
   'nav.tour': ['3D Tour', 'Tour 3D'],
   'nav.about': ['About', 'Nosotros'],
+  'nav.pay': ['Payments', 'Pagos'],
   'nav.call': ['Call', 'Llama'],
 
   'hero.eyebrow': ['El Paso, Texas · Since 2017 · Se habla español', 'El Paso, Texas · Desde 2017 · We speak English'],

@@ -28,6 +28,9 @@ const ROLES = ['admin', 'agent', 'finance', 'viewer']
 const initials = s => String(s || '?').trim().split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('') || '?'
 const suggestPw = () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(12)); for (const n of r) s += a[n % a.length]; return s }
 
+// Defaults for the payment options (same as the server, api/_lib/pay.js).
+const PAY_DEF = { web_on: true, web_min: 1, web_max: 10000, card: true, bank: true, partial: true, ref_en: 'Reference (property address, invoice or account number)', ref_es: 'Referencia (dirección de la casa, factura o número de cuenta)', web_note_en: '', web_note_es: '' }
+
 export async function settingsView(el) {
   const adv = S.advanced()
   const admin = S.isAdmin()
@@ -76,7 +79,19 @@ export async function settingsView(el) {
           </div>
           <div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn gold">${esc(t('team.add'))}</button></div>
         </form></div>` : ''}
-      ${admin ? `<div class="card fade-in" id="stripecard"><h3>💳 ${esc(t('pay.set_title'))}<span class="r pill" data-stripe>…</span></h3><p class="lead">${esc(t('pay.set_lead'))}</p><div data-stripe-steps hidden><ol class="muted" style="margin:0;padding-left:18px;font-size:13px;line-height:1.6">${t('pay.set_steps').split('|').map(x => `<li>${esc(x)}</li>`).join('')}</ol><p class="muted mono" style="font-size:12px;margin:8px 0 0">${esc(location.origin)}/api/pay/webhook</p></div><p class="muted" data-stripe-ok hidden style="margin:0;font-size:13px">${esc(t('pay.set_ok'))}</p></div>` : ''}
+      ${admin ? `<div class="card fade-in" id="stripecard"><h3>💳 ${esc(t('pay.set_title'))}<span class="r pill" data-stripe>…</span></h3><p class="lead">${esc(t('pay.set_lead'))}</p><div data-stripe-steps hidden><ol class="muted" style="margin:0;padding-left:18px;font-size:13px;line-height:1.6">${t('pay.set_steps').split('|').map(x => `<li>${esc(x)}</li>`).join('')}</ol><p class="muted mono" style="font-size:12px;margin:8px 0 0">${esc(location.origin)}/api/pay/webhook</p></div><p class="muted" data-stripe-ok hidden style="margin:0;font-size:13px">${esc(t('pay.set_ok'))}</p>
+        <form data-payopt style="margin-top:12px;display:grid;gap:8px">${(() => { const c = { ...PAY_DEF, ...(S.settings().payments || {}) }; return `
+          <b style="font-size:13px">${esc(t('pay.o_title'))}</b>
+          <label class="chk"><input type="checkbox" name="card" ${c.card ? 'checked' : ''}> ${esc(t('pay.o_card'))}</label>
+          <label class="chk"><input type="checkbox" name="bank" ${c.bank ? 'checked' : ''}> ${esc(t('pay.o_bank'))}</label>
+          <label class="chk"><input type="checkbox" name="partial" ${c.partial ? 'checked' : ''}> ${esc(t('pay.o_partial'))}</label>
+          <label class="chk"><input type="checkbox" name="web_on" ${c.web_on ? 'checked' : ''}> ${esc(t('pay.o_web'))} <a href="/pay/" target="_blank" rel="noopener">/pay/</a></label>
+          <div class="ib-row"><div class="f" style="flex:1"><label>${esc(t('pay.o_min'))}</label><input name="web_min" type="number" min="1" step="1" value="${esc(c.web_min)}"></div><div class="f" style="flex:1"><label>${esc(t('pay.o_max'))}</label><input name="web_max" type="number" min="1" step="1" value="${esc(c.web_max)}"></div></div>
+          <div class="f"><label>${esc(t('pay.o_ref'))} (EN)</label><input name="ref_en" maxlength="120" value="${esc(c.ref_en)}"></div>
+          <div class="f"><label>${esc(t('pay.o_ref'))} (ES)</label><input name="ref_es" maxlength="120" value="${esc(c.ref_es)}"></div>
+          <div class="f"><label>${esc(t('pay.o_note'))} (EN)</label><input name="web_note_en" maxlength="200" value="${esc(c.web_note_en)}"></div>
+          <div class="f"><label>${esc(t('pay.o_note'))} (ES)</label><input name="web_note_es" maxlength="200" value="${esc(c.web_note_es)}"></div>
+          <div style="display:flex;justify-content:flex-end"><button class="btn sm gold">${esc(t('pay.o_save'))}</button></div>` })()}</form></div>` : ''}
       <div class="card fade-in"><h3>${esc(t('dnc.title'))}<span class="r pill ${dm?.count ? 'ok' : ''}">${(dm?.count || 0).toLocaleString()} ${esc(t('dnc.numbers'))}</span></h3>
         <p class="lead">${esc(t('dnc.hint'))}</p>
         <div class="drop" id="dncdrop" tabindex="0" role="button">${icon('upload')}<div><b>${esc(t('dnc.import'))}</b></div><p>TXT · CSV</p></div>
@@ -138,6 +153,13 @@ export async function settingsView(el) {
     const map = {}
     for (const line of String(new FormData(e.target).get('psf') || '').split(/\n/)) { const m = line.match(/^\s*(\d{5}|default)\s*[=:,]\s*([\d.]+)/i); if (m) map[m[1].toLowerCase()] = +m[2] }
     S.saveSettings({ psfByZip: map }); toast(t('s.saved'))
+  })
+  el.querySelector('[data-payopt]')?.addEventListener('submit', async e => {
+    e.preventDefault(); const f = e.target, fd = new FormData(f)
+    const v = { card: fd.get('card') === 'on', bank: fd.get('bank') === 'on', partial: fd.get('partial') === 'on', web_on: fd.get('web_on') === 'on', web_min: Math.max(1, +fd.get('web_min') || 1), web_max: Math.max(1, +fd.get('web_max') || 10000), ref_en: String(fd.get('ref_en')).trim() || PAY_DEF.ref_en, ref_es: String(fd.get('ref_es')).trim() || PAY_DEF.ref_es, web_note_en: String(fd.get('web_note_en')).trim(), web_note_es: String(fd.get('web_note_es')).trim() }
+    if (!v.card && !v.bank) v.card = true
+    if (v.web_max < v.web_min) v.web_max = v.web_min
+    try { await S.saveSettings({ payments: v }); toast(t('pay.o_saved')) } catch (err) { toast(err.message) }
   })
   fetch('/api/pay/status').then(r => r.json()).then(j => { const b = el.querySelector('[data-stripe]'); if (!b) return; b.textContent = j.ready ? (j.mode === 'live' ? t('pay.st_live') : t('pay.st_test')) + (j.webhook ? '' : ' · ' + t('pay.st_nohook')) : t('pay.st_off'); b.className = 'r pill ' + (j.ready && j.webhook ? 'ok' : 'warn'); const done = j.ready && j.webhook; el.querySelector('[data-stripe-steps]').hidden = done; el.querySelector('[data-stripe-ok]').hidden = !done }).catch(() => {})
   el.querySelector('[data-reset]')?.addEventListener('click', () => { S.resetDemo(); toast(t('s.saved')) })

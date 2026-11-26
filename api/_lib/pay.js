@@ -34,6 +34,22 @@ export function stripeSigOk(raw, header, secret = process.env.STRIPE_WEBHOOK_SEC
   return sigs.some(s => s.length === want.length && crypto.timingSafeEqual(Buffer.from(s), Buffer.from(want)))
 }
 
+// Payment options the team sets in the portal (Settings, Online payments). Saved in settings key "payments".
+export const PAY_DEFAULTS = { web_on: true, web_min: 1, web_max: 10000, card: true, bank: true, partial: true,
+  ref_en: 'Reference (property address, invoice or account number)', ref_es: 'Referencia (dirección de la casa, factura o número de cuenta)', web_note_en: '', web_note_es: '' }
+export async function payConfig(db, orgId) {
+  const v = orgId ? (await (await db.rest(`settings?org_id=eq.${orgId}&key=eq.payments&select=value`)).json().catch(() => []))?.[0]?.value : null
+  const c = { ...PAY_DEFAULTS, ...(v && typeof v === 'object' ? v : {}) }
+  if (!c.card && !c.bank) c.card = true
+  return c
+}
+export const methodsOf = c => [c.card && 'card', c.bank && 'us_bank_account'].filter(Boolean)
+// The company behind the public website payments (one org per site; IAM_ORG_SLUG overrides).
+export async function siteOrg(db) {
+  const slug = process.env.IAM_ORG_SLUG || 'iam'
+  return (await (await db.rest(`orgs?slug=eq.${encodeURIComponent(slug)}&select=id,name,sms_number`)).json().catch(() => []))?.[0] || null
+}
+
 const pad = n => String(n).padStart(2, '0')
 const monthOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`
 const mm = s => +s.slice(0, 4) * 12 + +s.slice(5, 7)
@@ -71,8 +87,9 @@ export async function payTarget(token) {
   const owed = p => { const pay = (pays || []).find(x => x.period === p); if (pay?.status === 'waived') return 0; return Math.max(0, Math.round(((+ob.amount || 0) - (+pay?.amount_paid || 0)) * 100) / 100) }
   let period = null
   for (let i = 0; i <= 12 && !period; i++) { const p = addMonths(now, i); if (applies(ob, p) && owed(p) > 0) period = p }
-  if (!period) return { ob, org, inv, period: null, amount: 0 }
-  return { ob, org, inv, period, due: dueOn(ob, period), amount: owed(period) }
+  const cfg = await payConfig(db, ob.org_id)
+  if (!period) return { ob, org, inv, cfg, period: null, amount: 0 }
+  return { ob, org, inv, cfg, period, due: dueOn(ob, period), amount: owed(period) }
 }
 
 export const KIND_LABEL = { rent: ['Rent', 'Renta'], wrap: ['Home payment', 'Pago de casa'], loan: ['Loan payment', 'Pago de préstamo'], other: ['Payment', 'Pago'] }

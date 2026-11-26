@@ -1,5 +1,5 @@
 // POST /api/pay/checkout { t }  Public: opens a Stripe Checkout page (card or bank account) for what the link owes now.
-import { payTarget, stripe, stripeReady, KIND_LABEL } from '../_lib/pay.js'
+import { payTarget, stripe, stripeReady, KIND_LABEL, methodsOf } from '../_lib/pay.js'
 
 const hits = new Map()
 export default async function handler(req, res) {
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   if (!x.period || !(x.amount > 0)) return res.status(409).json({ error: 'nothing_due' })
   // A different amount (partial payment) only on recurring links, between $1 and what is owed.
   let amount = x.amount
-  if (b.amount != null && b.amount !== '' && x.ob.frequency !== 'once') {
+  if (b.amount != null && b.amount !== '' && x.ob.frequency !== 'once' && x.cfg.partial !== false) {
     const a = Math.round(parseFloat(String(b.amount).replace(/[$,]/g, '')) * 100) / 100
     if (!(a >= 1) || a > x.amount) return res.status(400).json({ error: 'bad_amount', max: x.amount })
     amount = a
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     const s = await stripe('checkout/sessions', {
       mode: 'payment',
       // Newer Stripe API: allowed_payment_method_types (card covers Apple Pay and Google Pay).
-      allowed_payment_method_types: ['card', 'us_bank_account'],
+      allowed_payment_method_types: methodsOf(x.cfg),
       line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: Math.round(amount * 100), product_data: { name: what.slice(0, 250) } } }],
       // Embedded: the Stripe payment form shows inside our own pay page (logo, colors), not on a Stripe page.
       ui_mode: 'embedded_page', return_url: back + '&ok=1&session_id={CHECKOUT_SESSION_ID}',
