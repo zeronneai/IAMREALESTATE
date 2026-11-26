@@ -83,7 +83,8 @@
           if (!j.client_secret) throw new Error(j.detail || j.error || 'fail')
           await loadStripe()
           // The Stripe payment form, inside this page (card, bank account, Apple Pay / Google Pay when available).
-          const checkout = await window.Stripe(info.pk, { locale: lang }).initEmbeddedCheckout({ fetchClientSecret: async () => j.client_secret })
+          const st = window.Stripe(info.pk, { locale: lang }), opts = { fetchClientSecret: async () => j.client_secret }
+          const checkout = st.createEmbeddedCheckoutPage ? await st.createEmbeddedCheckoutPage(opts) : await st.initEmbeddedCheckout(opts)
           document.getElementById('pre').hidden = true
           checkout.mount('#checkout')
           document.querySelector('.amt').textContent = money(j.amount || a)
@@ -91,7 +92,7 @@
       }
     }
     let stripeLoading = null
-    const loadStripe = () => stripeLoading || (stripeLoading = new Promise((ok, no) => { if (window.Stripe) return ok(); const sc = document.createElement('script'); sc.src = 'https://js.stripe.com/v3/'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc) }))
+    const loadStripe = () => stripeLoading || (stripeLoading = new Promise((ok, no) => { if (window.Stripe) return ok(); const sc = document.createElement('script'); sc.src = 'https://js.stripe.com/endive/stripe.js'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc) }))
     document.getElementById('lang').onclick = () => { lang = lang === 'es' ? 'en' : 'es'; paint() }
     if (!token) { err = 'bad'; paint() }
     else fetch('/api/pay/info?t=' + encodeURIComponent(token)).then(r => r.ok ? r.json() : Promise.reject()).then(j => { info = j; paint() }).catch(() => { err = 'bad'; paint() })

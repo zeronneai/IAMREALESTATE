@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       allowed_payment_method_types: ['card', 'us_bank_account'],
       line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: Math.round(amount * 100), product_data: { name: what.slice(0, 250) } } }],
       // Embedded: the Stripe payment form shows inside our own pay page (logo, colors), not on a Stripe page.
-      ui_mode: 'embedded', return_url: back + '&ok=1&session_id={CHECKOUT_SESSION_ID}',
+      ui_mode: 'embedded_page', return_url: back + '&ok=1&session_id={CHECKOUT_SESSION_ID}',
       metadata: { obligation_id: x.ob.id, period: x.period, org_id: x.ob.org_id, due: x.due },
       payment_intent_data: { metadata: { obligation_id: x.ob.id, period: x.period, org_id: x.ob.org_id }, description: what.slice(0, 250) },
       ...(b.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email) ? { customer_email: String(b.email).slice(0, 120) } : {}),
