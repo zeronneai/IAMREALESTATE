@@ -9,7 +9,7 @@ import { DEFAULT_SENDER, recipient } from '../mail.js'
 let cur = null, unsub = null, draft = { channel: 'sms', to: '', subject: '', body: '' }
 
 const time = iso => { const d = new Date(iso), now = new Date(); return d.toDateString() === now.toDateString() ? d.toLocaleTimeString(getLang() === 'es' ? 'es-MX' : 'en-US', { hour: 'numeric', minute: '2-digit' }) : date(iso) }
-const fmtPhone = v => { const d = String(v).replace(/\D/g, '').slice(-10); return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : v }
+const fmtPhone = v => { const all = String(v).replace(/\D/g, ''); if (all.length > 11 || (all.length === 11 && all[0] !== '1')) return '+' + all.slice(0, all.length - 10) + ' ' + all.slice(-10, -7) + ' ' + all.slice(-7, -4) + ' ' + all.slice(-4); const d = all.slice(-10); return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : v }
 const sameNum = (a, b) => String(a).replace(/\D/g, '').slice(-10) === String(b).replace(/\D/g, '').slice(-10)
 
 export function fill(tpl, p) {
