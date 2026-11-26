@@ -188,7 +188,7 @@ export function financeView(el) {
     </div>`
   el.innerHTML = `
   <div class="pf-month fade-in"><div class="seg-mini"><button data-tab="out" class="${finTab === 'out' ? 'on' : ''}">${esc(t('fin.to_pay'))}</button><button data-tab="in" class="${finTab === 'in' ? 'on' : ''}">${esc(t('fin.to_collect'))}</button></div>
-    <span class="sp"></span>${finTab === 'in' ? `<button class="btn sm ghost" data-rr>${icon('upload')}${esc(t('rr.import'))}</button>` : ''}<button class="btn sm gold" data-bill>${icon('plus')}${esc(finTab === 'in' ? t('pf.add_item') : t('fin.add_bill'))}</button></div>
+    <span class="sp"></span>${finTab === 'in' ? `<button class="btn sm ghost" data-rr>${icon('upload')}${esc(t('rr.import'))}</button><button class="btn sm ghost" data-qc>💳 ${esc(t('pay.qc'))}</button>` : ''}<button class="btn sm gold" data-bill>${icon('plus')}${esc(finTab === 'in' ? t('pf.add_item') : t('fin.add_bill'))}</button></div>
   <div class="pf-kpis fade-in">
     <div class="pf-kpi"><small>${esc(t('fin.g_late'))}</small><b class="${groups[0][1].length ? 'neg' : ''}">${money(sum(groups[0][1], i => i.amount))}</b><span class="muted">${groups[0][1].length} ${esc(t('fin.items'))}</span></div>
     <div class="pf-kpi"><small>${esc(t('fin.g_week'))}</small><b>${money(sum(groups[1][1], i => i.amount))}</b><span class="muted">${groups[1][1].length} ${esc(t('fin.items'))}</span></div>
@@ -198,6 +198,7 @@ export function financeView(el) {
   ${groups.map(([g, l]) => l.length ? `<div class="card fade-in fin-group"><h3>${esc(t(g === 'done' && finTab === 'in' ? 'fin.g_done_in' : 'fin.g_' + g))} <span class="muted" style="font-weight:500">· ${l.length}</span></h3>${l.map(row).join('')}</div>` : '').join('') || `<div class="card"><p class="muted">${esc(t('fin.empty'))}</p></div>`}`
   el.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { finTab = b.dataset.tab; financeView(el) })
   el.querySelector('[data-rr]')?.addEventListener('click', () => rentRediModal(() => financeView(el)))
+  el.querySelector('[data-qc]')?.addEventListener('click', () => quickChargeModal(() => financeView(el)))
   el.querySelector('[data-bill]').onclick = () => oblModal(null, finTab === 'in' ? S.inventory()[0]?.id || null : null, () => financeView(el), finTab === 'in' ? { kind: 'rent', freq: 'monthly' } : null)
   el.querySelectorAll('[data-k]').forEach(r => r.querySelector('[data-k2]').onclick = () => { const [oid, per] = r.dataset.k.split('|'); const it = S.periodItems(per).find(i => i.ob.id === oid); if (it) payModal(it, () => financeView(el)) })
 }
@@ -286,4 +287,38 @@ function rentRediModal(done) {
       }
     }
   }, { wide: true })
+}
+
+// Quick charge: concept + amount typed by the team, pay link to copy or text right away.
+function quickChargeModal(done) {
+  const homes = S.inventory()
+  modal(`<h3>💳 ${esc(t('pay.qc'))}</h3><p class="muted">${esc(t('pay.qc_lead'))}</p>
+    <form class="form-grid" data-qcf>
+      <div class="f full"><label>${esc(t('pay.qc_concept'))}</label><input name="concept" required maxlength="120" placeholder="${esc(t('pay.qc_concept_ph'))}"></div>
+      <div class="f"><label>${esc(t('pay.qc_amount'))}</label><input name="amount" type="number" min="1" step="0.01" required placeholder="0.00"></div>
+      <div class="f"><label>${esc(t('pay.qc_who'))}</label><input name="party" maxlength="80" placeholder="Maria Lopez"></div>
+      <div class="f"><label>${esc(t('pay.qc_home'))}</label><select name="inv"><option value="">-</option>${homes.map(v => `<option value="${esc(v.id)}">${esc(v.address)}</option>`).join('')}</select></div>
+      <div class="f"><label>${esc(t('pay.phone_ph'))}</label><input name="phone" inputmode="tel" placeholder="(915) 555-0123"></div>
+      <div class="f full" style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-close>${esc(t('cancel'))}</button><button class="btn gold">${esc(t('pay.qc_make'))}</button></div>
+    </form><div data-qcout></div>`, box => {
+  const f = box.querySelector('[data-qcf]')
+  f.onsubmit = async e => {
+    e.preventDefault()
+    const fd = new FormData(f), amount = +fd.get('amount'), concept = String(fd.get('concept')).trim(), party = String(fd.get('party')).trim(), phone = String(fd.get('phone')).trim()
+    if (!(amount >= 1) || !concept) return
+    f.querySelector('button.gold').disabled = true
+    try {
+      const url = await S.quickCharge({ concept, party, amount, invId: fd.get('inv') || null })
+      let sent = false
+      if (phone) {
+        const first = party.split(/\s+/)[0]
+        try { await S.sendMessage({ parcelId: null, channel: 'sms', to: phone, body: t('pay.sms_body').replace('{name}', first ? ' ' + first : '').replace('{what}', concept).replace('{amount}', money(amount)).replace('{date}', date(new Date().toISOString().slice(0, 10))).replace('{url}', url) }); sent = true } catch (err) { toast(err.message) }
+      }
+      box.querySelector('[data-qcout]').innerHTML = `<div class="paylink"><b>✅ ${esc(t(sent ? 'pay.sent' : 'pay.qc_ready'))}</b><input readonly value="${esc(url)}" onclick="this.select()"><button type="button" class="btn sm gold" data-cp>${esc(t('pay.copy'))}</button></div>`
+      box.querySelector('[data-cp]').onclick = async () => { try { await navigator.clipboard.writeText(url); toast(t('pay.copied')) } catch { /* select it */ } }
+      f.hidden = true
+      done?.()
+    } catch (err) { toast(err.message); f.querySelector('button.gold').disabled = false }
+  }
+  })
 }

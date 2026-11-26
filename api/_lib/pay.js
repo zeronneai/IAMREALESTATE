@@ -75,4 +75,5 @@ export async function payTarget(token) {
   return { ob, org, inv, period, due: dueOn(ob, period), amount: owed(period) }
 }
 
-export const KIND_LABEL = { rent: ['Rent', 'Renta'], wrap: ['Home payment', 'Pago de casa'], loan: ['Loan payment', 'Pago de préstamo'] }
+export const KIND_LABEL = { rent: ['Rent', 'Renta'], wrap: ['Home payment', 'Pago de casa'], loan: ['Loan payment', 'Pago de préstamo'], other: ['Payment', 'Pago'] }
+export const stripePk = () => { const k = process.env.STRIPE_PUBLISHABLE_KEY || ''; return /^pk_(live|test)_/.test(k) ? k : null }

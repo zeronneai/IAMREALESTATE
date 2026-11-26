@@ -27,6 +27,10 @@
     .ok .big { font-size: 46px; }
     .lang { position: fixed; top: 12px; right: 14px; background: none; border: 1px solid var(--line); color: var(--gold); width: auto; padding: 6px 10px; margin: 0; font-size: 13px; border-radius: 8px; }
     .err { color: #ff8a7a; text-align: center; }
+    .chk { display: flex; gap: 8px; align-items: center; margin: 14px 0 0; color: var(--muted); font-size: 14px; cursor: pointer; }
+    .chk input { width: auto; }
+    #checkout { margin-top: 16px; border-radius: 12px; overflow: hidden; }
+    .link { background: none; color: var(--gold); width: auto; padding: 0; margin: 10px auto 0; display: block; font-weight: 500; font-size: 14px; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -34,8 +38,8 @@
   <main class="card" id="app"><img class="logo" src="/img/iam-logo.png" alt="I AM Real Estate" /><p class="sub" id="loading">Loading…</p></main>
   <script>
     const T = {
-      en: { title: 'Make a payment', due: 'Amount due', for: 'For', home: 'Home', month: 'Month', dueOn: 'Due date', email: 'Email for your receipt (optional)', pay: 'Pay securely', paying: 'Opening secure payment…', note: 'Card or bank account (ACH). Payments are processed securely by Stripe. Bank payments take 3 to 5 business days to clear.', none: 'You are all caught up. There is nothing due right now.', thanks: 'Thank you! Your payment was received.', thanksNote: 'You will get a receipt by email. Card payments post right away; bank payments when they clear.', bad: 'This payment link is not valid. Please contact us.', soon: 'Online payments are not active yet. Please contact us to pay.', fail: 'We could not open the payment page. Please try again.', hi: 'Hi', call: 'Questions? Text or call' },
-      es: { title: 'Hacer un pago', due: 'Monto a pagar', for: 'Concepto', home: 'Casa', month: 'Mes', dueOn: 'Fecha límite', email: 'Correo para tu recibo (opcional)', pay: 'Pagar de forma segura', paying: 'Abriendo el pago seguro…', note: 'Tarjeta o cuenta bancaria (ACH). Los pagos se procesan de forma segura con Stripe. Los pagos bancarios tardan de 3 a 5 días hábiles en reflejarse.', none: 'Estás al corriente. No hay nada pendiente por ahora.', thanks: '¡Gracias! Recibimos tu pago.', thanksNote: 'Te llegará un recibo por correo. Los pagos con tarjeta se registran de inmediato; los bancarios cuando se reflejan.', bad: 'Este link de pago no es válido. Por favor contáctanos.', soon: 'Los pagos en línea todavía no están activos. Contáctanos para pagar.', fail: 'No pudimos abrir la página de pago. Intenta de nuevo.', hi: 'Hola', call: '¿Dudas? Mándanos texto o llama al' },
+      en: { title: 'Make a payment', due: 'Amount due', for: 'For', home: 'Home', month: 'Month', dueOn: 'Due date', email: 'Email for your receipt (optional)', pay: 'Pay securely', paying: 'Opening secure payment…', note: 'Card or bank account (ACH). Payments are processed securely by Stripe. Bank payments take 3 to 5 business days to clear.', none: 'You are all caught up. There is nothing due right now.', thanks: 'Thank you! Your payment was received.', thanksNote: 'You will get a receipt by email. Card payments post right away; bank payments when they clear.', bad: 'This payment link is not valid. Please contact us.', soon: 'Online payments are not active yet. Please contact us to pay.', fail: 'We could not open the payment page. Please try again.', hi: 'Hi', call: 'Questions? Text or call', other: 'Pay a different amount', otherPh: 'Amount', max: 'Up to', badAmt: 'Write an amount between $1 and', back: 'Change amount' },
+      es: { title: 'Hacer un pago', due: 'Monto a pagar', for: 'Concepto', home: 'Casa', month: 'Mes', dueOn: 'Fecha límite', email: 'Correo para tu recibo (opcional)', pay: 'Pagar de forma segura', paying: 'Abriendo el pago seguro…', note: 'Tarjeta o cuenta bancaria (ACH). Los pagos se procesan de forma segura con Stripe. Los pagos bancarios tardan de 3 a 5 días hábiles en reflejarse.', none: 'Estás al corriente. No hay nada pendiente por ahora.', thanks: '¡Gracias! Recibimos tu pago.', thanksNote: 'Te llegará un recibo por correo. Los pagos con tarjeta se registran de inmediato; los bancarios cuando se reflejan.', bad: 'Este link de pago no es válido. Por favor contáctanos.', soon: 'Los pagos en línea todavía no están activos. Contáctanos para pagar.', fail: 'No pudimos abrir la página de pago. Intenta de nuevo.', hi: 'Hola', call: '¿Dudas? Mándanos texto o llama al', other: 'Pagar otra cantidad', otherPh: 'Cantidad', max: 'Hasta', badAmt: 'Escribe una cantidad entre $1 y', back: 'Cambiar cantidad' },
     }
     const q = new URLSearchParams(location.search), token = q.get('t') || ''
     let lang = (q.get('lang') || navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en', info = null, err = null
@@ -62,19 +66,32 @@
         ${info.home ? `<div class="row"><span>${esc(L.home)}</span><span>${esc(info.home)}${info.unit ? ' #' + esc(info.unit) : ''}</span></div>` : ''}
         <div class="row"><span>${esc(L.month)}</span><span>${esc(fmtMonth(info.period))}</span></div>
         ${info.due ? `<div class="row"><span>${esc(L.dueOn)}</span><span>${esc(fmtDate(info.due))}</span></div>` : ''}</div>
-        ${info.ready ? `<label for="em">${esc(L.email)}</label><input id="em" type="email" autocomplete="email" inputmode="email" />
-        <button id="go" type="button">${esc(L.pay)} · ${esc(money(info.amount))}</button><p class="note">${esc(L.note)}</p>` : `<p class="err" style="margin-top:18px">${esc(L.soon)}</p>`}` + contact
-      const go = document.getElementById('go')
+        ${info.ready ? `<div id="pre">${info.other_amount ? `<label class="chk"><input type="checkbox" id="oth"> ${esc(L.other)}</label><div id="othbox" hidden><label for="amt">${esc(L.otherPh)} (${esc(L.max)} ${esc(money(info.amount))})</label><input id="amt" type="number" inputmode="decimal" min="1" step="0.01" max="${info.amount}" placeholder="0.00" /></div>` : ''}
+        <label for="em">${esc(L.email)}</label><input id="em" type="email" autocomplete="email" inputmode="email" />
+        <button id="go" type="button">${esc(L.pay)} · ${esc(money(info.amount))}</button></div><div id="checkout"></div><p class="note">${esc(L.note)}</p>` : `<p class="err" style="margin-top:18px">${esc(L.soon)}</p>`}` + contact
+      const go = document.getElementById('go'), oth = document.getElementById('oth'), amt = document.getElementById('amt')
+      const chosen = () => oth?.checked ? parseFloat(amt.value) : info.amount
+      if (oth) oth.onchange = () => { document.getElementById('othbox').hidden = !oth.checked; go.textContent = `${L.pay} · ${money(oth.checked ? (parseFloat(amt.value) || 0) : info.amount)}` }
+      if (amt) amt.oninput = () => { go.textContent = `${L.pay} · ${money(parseFloat(amt.value) || 0)}` }
       if (go) go.onclick = async () => {
+        const a = chosen()
+        if (oth?.checked && !(a >= 1 && a <= info.amount)) { alert(`${L.badAmt} ${money(info.amount)}`); return }
         go.disabled = true; go.textContent = L.paying
         try {
-          const r = await fetch('/api/pay/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, email: document.getElementById('em').value.trim() }) })
+          const r = await fetch('/api/pay/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, email: document.getElementById('em').value.trim(), amount: oth?.checked ? a : null }) })
           const j = await r.json()
-          if (j.url) { location.href = j.url; return }
-          throw new Error(j.error || 'fail')
-        } catch { go.disabled = false; go.textContent = `${L.pay} · ${money(info.amount)}`; alert(L.fail) }
+          if (!j.client_secret) throw new Error(j.error || 'fail')
+          await loadStripe()
+          // The Stripe payment form, inside this page (card, bank account, Apple Pay / Google Pay when available).
+          const checkout = await window.Stripe(info.pk, { locale: lang }).initEmbeddedCheckout({ fetchClientSecret: async () => j.client_secret })
+          document.getElementById('pre').hidden = true
+          checkout.mount('#checkout')
+          document.querySelector('.amt').textContent = money(j.amount || a)
+        } catch { go.disabled = false; go.textContent = `${L.pay} · ${money(chosen() || info.amount)}`; alert(L.fail) }
       }
     }
+    let stripeLoading = null
+    const loadStripe = () => stripeLoading || (stripeLoading = new Promise((ok, no) => { if (window.Stripe) return ok(); const sc = document.createElement('script'); sc.src = 'https://js.stripe.com/v3/'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc) }))
     document.getElementById('lang').onclick = () => { lang = lang === 'es' ? 'en' : 'es'; paint() }
     if (!token) { err = 'bad'; paint() }
     else fetch('/api/pay/info?t=' + encodeURIComponent(token)).then(r => r.ok ? r.json() : Promise.reject()).then(j => { info = j; paint() }).catch(() => { err = 'bad'; paint() })

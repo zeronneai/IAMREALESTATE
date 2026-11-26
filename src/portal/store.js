@@ -986,6 +986,18 @@ export async function payLink(ob) {
   }
   return `${location.origin}/pay/?t=${tok}`
 }
+// Quick charge: a one-time amount the team types (deposit, late fee, repair, anything) with its own pay link.
+export async function quickCharge({ concept, party, amount, invId }) {
+  const b = crypto.getRandomValues(new Uint8Array(18))
+  const tok = btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const today = new Date().toISOString().slice(0, 10)
+  const ob = { kind: 'other', dir: 'in', freq: 'once', dueDate: today, amount: +amount, party: party || '', label: concept, invId: invId || null, payToken: tok, active: true, grace: 0 }
+  if (MODE === 'demo' || !sb) { await saveObligation(ob); return `${location.origin}/pay/?t=${tok}` }
+  const { error } = await sb.from('obligations').insert({ inventory_id: isUuid(invId) ? invId : null, kind: 'other', direction: 'in', party: party || null, amount: +amount, frequency: 'once', due_date: today, grace_days: 0, active: true, label: concept, pay_token: tok, notes: 'Quick charge (pay link)' })
+  if (error) throw new Error(/column|schema cache/i.test(error.message) ? t('pay.e_sql') : t('team.e_error') + ' (' + error.message + ')')
+  await loadFinance()
+  return `${location.origin}/pay/?t=${tok}`
+}
 export async function undoPayment(it) {
   if (!it.pay) return
   if (MODE === 'demo' || !sb) { db.payments = demoFin().payments.filter(x => x.id !== it.pay.id); persist(); emit(); return }

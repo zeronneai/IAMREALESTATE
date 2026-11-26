@@ -1,5 +1,5 @@
 // GET /api/pay/info?t=<token>  Public: what a pay link is for (company, home, amount due, period). No private data.
-import { payTarget, stripeReady, KIND_LABEL } from '../_lib/pay.js'
+import { payTarget, stripeReady, stripePk, KIND_LABEL } from '../_lib/pay.js'
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
@@ -9,6 +9,8 @@ export default async function handler(req, res) {
   res.status(200).json({
     company: x.org?.name || 'I AM Real Estate', phone: x.org?.sms_number || null,
     home: x.inv?.address || null, unit: x.ob.unit || null, kind: x.ob.kind, label: x.ob.label || null, kind_label: KIND_LABEL[x.ob.kind] || KIND_LABEL.rent,
-    name: first, period: x.period, due: x.due || null, amount: x.amount, ready: stripeReady(),
+    name: first, period: x.period, due: x.due || null, amount: x.amount, ready: stripeReady() && !!stripePk(), pk: stripePk(),
+    // Rent, wrap and loan links let them pay part of it (or a different amount the team agreed); one-time charges are exact.
+    other_amount: x.ob.frequency !== 'once',
   })
 }
