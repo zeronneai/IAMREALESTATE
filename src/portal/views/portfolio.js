@@ -138,6 +138,7 @@ export function payModal(it, done) {
   modal(`<h3>${esc(inbound ? t('pf.mark_received') : t('pf.mark_paid'))}</h3>
     <p class="muted" style="margin:0">${esc(what(it))}${it.inv ? ' · ' + esc(it.inv.address) : ''} · ${esc(t('pf.due'))} ${esc(date(it.due))} ${pill(it)}</p>
     ${it.ob.payUrl && !inbound ? `<a class="btn sm" href="${esc(it.ob.payUrl)}" target="_blank" rel="noopener">${esc(t('pf.open_pay'))} ↗</a>` : ''}
+    ${inbound && it.ob.stripeAutopay ? `<div class="paylink"><b>🔁 ${esc(t('pay.auto_on'))}${it.ob.stripePmLabel ? ' · ' + esc(it.ob.stripePmLabel) : ''}</b><span class="muted">${esc(t('pay.auto_lead'))}</span>${it.ob.stripeLastError ? `<span class="neg">${esc(t('pay.auto_fail'))}: ${esc(it.ob.stripeLastError)}</span>` : ''}<div><button type="button" class="btn sm ghost" data-autooff>${esc(t('pay.auto_off'))}</button></div></div>` : ''}
     ${inbound && !it.pay ? `<div class="paylink"><b>💳 ${esc(t('pay.title'))}</b><span class="muted">${esc(t('pay.lead'))}</span>
       <div class="ib-row"><button type="button" class="btn sm gold" data-plcopy>${esc(t('pay.copy'))}</button><input data-plphone placeholder="${esc(t('pay.phone_ph'))}" style="flex:1;min-width:140px"><button type="button" class="btn sm" data-plsms>${esc(t('pay.sms'))}</button></div></div>` : ''}
     <form class="form-grid" data-pay>
@@ -152,6 +153,7 @@ export function payModal(it, done) {
     </form>`, (box, close) => {
     const f = box.querySelector('[data-pay]')
     const link = async () => { try { return await S.payLink(it.ob) } catch (err) { toast(err.message); return null } }
+    box.querySelector('[data-autooff]')?.addEventListener('click', async () => { try { await S.stopAutopay(it.ob); toast(t('pay.auto_offed')); close() } catch (err) { toast(err.message) } })
     box.querySelector('[data-plcopy]')?.addEventListener('click', async () => { const u = await link(); if (!u) return; try { await navigator.clipboard.writeText(u); toast(t('pay.copied')) } catch { prompt(t('pay.copy'), u) } })
     box.querySelector('[data-plsms]')?.addEventListener('click', async () => {
       const to = box.querySelector('[data-plphone]').value.trim(); if (!to) return toast(t('pay.phone_need'))
@@ -182,9 +184,9 @@ export function financeView(el) {
   ]
   const row = i => `<div class="fin-row ${i.status}" data-k="${esc(i.ob.id)}|${i.period}">
       <div class="fin-date"><b>${esc(new Date(i.due + 'T12:00:00').toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' }))}</b>${pill(i)}</div>
-      <div class="fin-what"><b>${esc(what(i))}</b><small>${esc(i.inv?.address || t('pf.company_bill'))}${i.ob.account ? ' · ' + esc(i.ob.account) : ''}${i.pay?.reference ? ' · #' + esc(i.pay.reference) : ''}${i.pay?.paidOn ? ' · ' + esc(t('pf.paid_on')) + ' ' + esc(date(i.pay.paidOn)) : ''}</small></div>
+      <div class="fin-what"><b>${esc(what(i))}${i.ob.stripeAutopay ? ' 🔁' : ''}</b><small>${i.ob.stripeLastError ? `<span class="neg">${esc(t('pay.auto_fail'))}: ${esc(i.ob.stripeLastError.replace(/^\d{4}-\d\d-\d\d:\s*/, ''))}</span> · ` : ''}${esc(i.inv?.address || t('pf.company_bill'))}${i.ob.account ? ' · ' + esc(i.ob.account) : ''}${i.pay?.reference ? ' · #' + esc(i.pay.reference) : ''}${i.pay?.paidOn ? ' · ' + esc(t('pf.paid_on')) + ' ' + esc(date(i.pay.paidOn)) : ''}</small></div>
       <b class="fin-amt">${money(i.pay?.paid || i.amount)}</b>
-      ${i.pay ? `<button class="btn sm ghost" data-k2>${esc(t('seq.edit'))}</button>` : `<button class="btn sm gold" data-k2>${esc(finTab === 'in' ? t('pf.mark_received') : t('pf.mark_paid'))}</button>`}
+      ${finTab === 'in' && i.pay && S.isWebPayment(i.ob) ? `<button class="btn sm gold" data-apply>${esc(t('pay.apply'))}</button>` : ''}${i.pay ? `<button class="btn sm ghost" data-k2>${esc(t('seq.edit'))}</button>` : `<button class="btn sm gold" data-k2>${esc(finTab === 'in' ? t('pf.mark_received') : t('pf.mark_paid'))}</button>`}
     </div>`
   el.innerHTML = `
   <div class="pf-month fade-in"><div class="seg-mini"><button data-tab="out" class="${finTab === 'out' ? 'on' : ''}">${esc(t('fin.to_pay'))}</button><button data-tab="in" class="${finTab === 'in' ? 'on' : ''}">${esc(t('fin.to_collect'))}</button></div>
@@ -197,6 +199,11 @@ export function financeView(el) {
   </div>
   ${groups.map(([g, l]) => l.length ? `<div class="card fade-in fin-group"><h3>${esc(t(g === 'done' && finTab === 'in' ? 'fin.g_done_in' : 'fin.g_' + g))} <span class="muted" style="font-weight:500">· ${l.length}</span></h3>${l.map(row).join('')}</div>` : '').join('') || `<div class="card"><p class="muted">${esc(t('fin.empty'))}</p></div>`}`
   el.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { finTab = b.dataset.tab; financeView(el) })
+  el.querySelectorAll('[data-apply]').forEach(b => b.onclick = e => {
+    e.stopPropagation()
+    const [obId, per] = b.closest('[data-k]').dataset.k.split('|'), src = all.find(i => i.ob.id === obId && i.period === per)
+    if (src) applyModal(src, all.filter(i => i.ob.dir === 'in' && !S.isWebPayment(i.ob) && (!i.pay || i.pay.status === 'partial')), () => financeView(el))
+  })
   el.querySelector('[data-rr]')?.addEventListener('click', () => rentRediModal(() => financeView(el)))
   el.querySelector('[data-qc]')?.addEventListener('click', () => quickChargeModal(() => financeView(el)))
   el.querySelector('[data-bill]').onclick = () => oblModal(null, finTab === 'in' ? S.inventory()[0]?.id || null : null, () => financeView(el), finTab === 'in' ? { kind: 'rent', freq: 'monthly' } : null)
@@ -320,5 +327,23 @@ function quickChargeModal(done) {
       done?.()
     } catch (err) { toast(err.message); f.querySelector('button.gold').disabled = false }
   }
+  })
+}
+
+// Apply a website payment to something pending (rent, wrap, deposit of a given home).
+function applyModal(src, pending, done) {
+  const label = i => `${what(i)} · ${i.inv?.address || t('pf.company_bill')} · ${new Date(i.due + 'T12:00:00').toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' })} · ${money(i.amount - (+i.pay?.paid || 0))}`
+  const ref = src.ob.label.replace(/^Web payment:\s*/, '')
+  const words = (ref + ' ' + (src.ob.party || '')).toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2)
+  const score = i => words.filter(w => (label(i) + ' ' + i.ob.party).toLowerCase().includes(w)).length
+  const list = [...pending].sort((a, b) => score(b) - score(a) || a.due.localeCompare(b.due))
+  modal(`<h3>${esc(t('pay.apply'))}</h3><p class="muted">${esc(money(src.pay.paid))} · ${esc(src.ob.party || '')} · ${esc(t('pay.apply_ref'))}: <b>${esc(ref)}</b></p>
+    <input data-q placeholder="${esc(t('pay.apply_search'))}" style="width:100%;margin:6px 0">
+    <div data-list style="max-height:340px;overflow:auto;display:grid;gap:6px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn ghost" data-close>${esc(t('cancel'))}</button></div>`, (box, close) => {
+    const paint = q => { const l = list.filter(i => !q || (label(i) + ' ' + i.ob.party).toLowerCase().includes(q.toLowerCase())).slice(0, 60)
+      box.querySelector('[data-list]').innerHTML = l.map((i, n) => `<button type="button" class="btn ghost" style="justify-content:flex-start;text-align:left" data-n="${list.indexOf(i)}">${esc(label(i))}${i.ob.party ? ' · ' + esc(i.ob.party) : ''}</button>`).join('') || `<p class="muted">${esc(t('fin.empty'))}</p>`
+      box.querySelectorAll('[data-n]').forEach(b => b.onclick = async () => { b.disabled = true; try { await S.applyWebPayment(src, list[+b.dataset.n]); toast(t('pay.applied')); close(); done?.() } catch (err) { toast(err.message); b.disabled = false } }) }
+    box.querySelector('[data-q]').oninput = e => paint(e.target.value.trim()); paint('')
   })
 }

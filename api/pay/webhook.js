@@ -1,8 +1,9 @@
 // POST /api/pay/webhook  Stripe events. In Stripe: Developers > Webhooks > Add endpoint
 //   https://<portal>/api/pay/webhook  with: checkout.session.completed, checkout.session.async_payment_succeeded,
-//   checkout.session.async_payment_failed. Its signing secret goes in Vercel as STRIPE_WEBHOOK_SECRET.
+//   checkout.session.async_payment_failed, payment_intent.succeeded, payment_intent.payment_failed (the last two are
+//   the automatic monthly charges). Its signing secret goes in Vercel as STRIPE_WEBHOOK_SECRET.
 // A card payment is marked received right away; a bank (ACH) payment when it clears (a few days).
-import { stripeSigOk } from '../_lib/pay.js'
+import { stripeSigOk, stripe } from '../_lib/pay.js'
 import { sb } from '../_lib/outreach.js'
 
 // The signature is over the exact bytes Stripe sent, so read the raw stream (never touch req.body first:
@@ -13,6 +14,27 @@ async function rawBody(req) {
   return Buffer.concat(chunks).toString('utf8')
 }
 
+// Autopay: keep the saved card or bank account on the payment line (only Stripe ids and a label like "Visa ending 4242").
+async function saveAutopay(db, obId, customer, pmId) {
+  if (!obId || !pmId) return
+  const pm = await stripe(`payment_methods/${pmId}`, {}, 'GET').catch(() => null)
+  const label = pm?.card ? `${(pm.card.brand || 'card').replace(/^\w/, c => c.toUpperCase())} ending ${pm.card.last4}` : pm?.us_bank_account ? `${pm.us_bank_account.bank_name || 'Bank'} ending ${pm.us_bank_account.last4}` : null
+  await db.rest(`obligations?id=eq.${encodeURIComponent(obId)}`, { method: 'PATCH', body: JSON.stringify({ stripe_autopay: true, stripe_customer: customer || pm?.customer || null, stripe_pm: pmId, stripe_pm_type: pm?.type || null, stripe_pm_label: label, stripe_last_error: null }) })
+}
+
+// Mark a month received (adds to what was already paid; never counts the same Stripe payment twice).
+async function recordPaid(db, { obligationId, period, due, cents, ref, payId, bank, email }) {
+  const ob = (await (await db.rest(`obligations?id=eq.${encodeURIComponent(obligationId)}&select=id,org_id,amount`)).json().catch(() => []))?.[0]
+  if (!ob) return 'unknown_obligation'
+  const prev = (await (await db.rest(`payments?obligation_id=eq.${ob.id}&period=eq.${period}&select=*`)).json().catch(() => []))?.[0]
+  if (prev?.stripe_ref && String(prev.stripe_ref).includes(ref)) return 'duplicate'
+  const got = Math.round(cents || 0) / 100, paid = Math.round(((+prev?.amount_paid || 0) + got) * 100) / 100
+  const row = { org_id: ob.org_id, obligation_id: ob.id, period, due_date: due || prev?.due_date || null, amount_due: +ob.amount || got, amount_paid: paid, paid_on: new Date().toISOString().slice(0, 10), method: bank ? 'Stripe (bank)' : 'Stripe (card)', reference: String(payId || ref).slice(0, 200), status: paid + 0.01 >= (+ob.amount || 0) ? 'paid' : 'partial', notes: [prev?.notes, `Paid online with Stripe${email ? ' by ' + email : ''}`].filter(Boolean).join(' · ').slice(0, 500), stripe_ref: [prev?.stripe_ref, ref].filter(Boolean).join(' ').slice(0, 500) }
+  const r = await db.rest('payments?on_conflict=obligation_id,period', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(row) })
+  if (!r.ok) { console.error('stripe webhook save', await r.text()); throw new Error('save') }
+  return 'ok'
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
   const raw = await rawBody(req)
@@ -20,9 +42,28 @@ export default async function handler(req, res) {
   let ev; try { ev = JSON.parse(raw) } catch { return res.status(400).end() }
   const s = ev?.data?.object || {}
   const md = s.metadata || {}
+  const db = sb(); if (!db.ok) return res.status(500).end()
+  // Automatic monthly charge made by api/cron/autopay.js.
+  if (/^payment_intent\.(succeeded|payment_failed)$/.test(ev.type)) {
+    if (md.autopay_charge !== '1' || !md.obligation_id) return res.status(200).json({ ok: true, skipped: 'not_autopay' })
+    if (ev.type === 'payment_intent.payment_failed') {
+      const why = s.last_payment_error?.message || 'Payment failed'
+      await db.rest(`obligations?id=eq.${encodeURIComponent(md.obligation_id)}`, { method: 'PATCH', body: JSON.stringify({ stripe_last_error: `${md.period || ''}: ${why}`.slice(0, 300) }) })
+      return res.status(200).json({ ok: true, failed: true })
+    }
+    try { await recordPaid(db, { obligationId: md.obligation_id, period: md.period, due: md.due, cents: s.amount_received || s.amount, ref: s.id, payId: s.id, bank: (s.payment_method_types || [])[0] === 'us_bank_account' }) } catch { return res.status(500).end() }
+    return res.status(200).json({ ok: true, autopay: true })
+  }
+  // Autopay turned on: save the card or bank account (also when a bank payment is still clearing).
+  if (ev.type === 'checkout.session.completed' && md.autopay === '1' && md.obligation_id) {
+    try {
+      if (s.mode === 'setup' && s.setup_intent) { const si = await stripe(`setup_intents/${s.setup_intent}`, {}, 'GET'); await saveAutopay(db, md.obligation_id, s.customer || si.customer, si.payment_method) }
+      else if (s.payment_intent) { const pi = await stripe(`payment_intents/${s.payment_intent}`, {}, 'GET'); await saveAutopay(db, md.obligation_id, s.customer || pi.customer, pi.payment_method) }
+    } catch (e) { console.error('autopay save', e.message) }
+    if (s.mode === 'setup') return res.status(200).json({ ok: true, autopay: 'saved' })
+  }
   const paidNow = (ev.type === 'checkout.session.completed' && s.payment_status === 'paid') || ev.type === 'checkout.session.async_payment_succeeded'
   if (!paidNow) return res.status(200).json({ ok: true, skipped: ev.type })
-  const db = sb(); if (!db.ok) return res.status(500).end()
   // Website payment (no pay link): save it as a one-time item received, with who paid and their reference.
   if (md.web === '1' && md.org_id) {
     const dup = (await (await db.rest(`payments?stripe_ref=like.*${encodeURIComponent(s.id)}*&select=id&limit=1`)).json().catch(() => []))
@@ -37,22 +78,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, web: true })
   }
   if (!md.obligation_id || !md.period) return res.status(200).json({ ok: true, skipped: 'no_obligation' })
-  const ob = (await (await db.rest(`obligations?id=eq.${encodeURIComponent(md.obligation_id)}&select=id,org_id,amount`)).json().catch(() => []))?.[0]
-  if (!ob) return res.status(200).json({ ok: true, skipped: 'unknown_obligation' })
-  const prev = (await (await db.rest(`payments?obligation_id=eq.${ob.id}&period=eq.${md.period}&select=*`)).json().catch(() => []))?.[0]
-  if (prev?.stripe_ref && String(prev.stripe_ref).includes(s.id)) return res.status(200).json({ ok: true, duplicate: true })
-  const got = Math.round((s.amount_total || 0)) / 100
-  const paid = Math.round(((+prev?.amount_paid || 0) + got) * 100) / 100
-  // Bank (ACH) payments finish later with async_payment_succeeded; card payments are paid at completion.
-  const ach = ev.type === 'checkout.session.async_payment_succeeded'
-  const row = {
-    org_id: ob.org_id, obligation_id: ob.id, period: md.period, due_date: md.due || prev?.due_date || null, amount_due: +ob.amount || got,
-    amount_paid: paid, paid_on: new Date().toISOString().slice(0, 10), method: ach ? 'Stripe (bank)' : 'Stripe (card)',
-    reference: String(s.payment_intent || s.id).slice(0, 200), status: paid + 0.01 >= (+ob.amount || 0) ? 'paid' : 'partial',
-    notes: [prev?.notes, `Paid online with Stripe${s.customer_details?.email ? ' by ' + s.customer_details.email : ''}`].filter(Boolean).join(' · ').slice(0, 500),
-    stripe_ref: [prev?.stripe_ref, s.id].filter(Boolean).join(' ').slice(0, 500),
-  }
-  const r = await db.rest('payments?on_conflict=obligation_id,period', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(row) })
-  if (!r.ok) { console.error('stripe webhook save', await r.text()); return res.status(500).end() }
-  res.status(200).json({ ok: true })
+  try {
+    const r = await recordPaid(db, { obligationId: md.obligation_id, period: md.period, due: md.due, cents: s.amount_total, ref: s.id, payId: s.payment_intent || s.id, bank: ev.type === 'checkout.session.async_payment_succeeded', email: s.customer_details?.email })
+    res.status(200).json({ ok: true, result: r })
+  } catch { res.status(500).end() }
 }

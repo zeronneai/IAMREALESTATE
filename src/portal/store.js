@@ -849,7 +849,7 @@ export async function reverseGeocode(lat, lng) {
 
 // ---------- portfolio & finance: recurring payments and what was paid ----------
 let obls = [], pays = []
-const oblRow = r => ({ id: r.id, invId: r.inventory_id, kind: r.kind, dir: r.direction, party: r.party || '', amount: +r.amount || 0, freq: r.frequency, dueDay: r.due_day, dueDate: r.due_date, grace: r.grace_days ?? 5, autopay: !!r.autopay, account: r.account || '', payUrl: r.pay_url || '', active: r.active !== false, notes: r.notes || '', lien: r.lien || 1, unit: r.unit || '', situation: r.situation || 'normal', extRef: r.ext_ref || '', label: r.label || '', payToken: r.pay_token || '' })
+const oblRow = r => ({ id: r.id, invId: r.inventory_id, kind: r.kind, dir: r.direction, party: r.party || '', amount: +r.amount || 0, freq: r.frequency, dueDay: r.due_day, dueDate: r.due_date, grace: r.grace_days ?? 5, autopay: !!r.autopay, account: r.account || '', payUrl: r.pay_url || '', active: r.active !== false, notes: r.notes || '', lien: r.lien || 1, unit: r.unit || '', situation: r.situation || 'normal', extRef: r.ext_ref || '', label: r.label || '', payToken: r.pay_token || '', stripeAutopay: !!r.stripe_autopay, stripePmLabel: r.stripe_pm_label || '', stripeLastError: r.stripe_last_error || '' })
 export const IN_KINDS = ['rent', 'wrap', 'loan']
 export const dirOf = kind => (IN_KINDS.includes(kind) ? 'in' : 'out')
 const payRow = r => ({ id: r.id, oblId: r.obligation_id, period: r.period, dueDate: r.due_date, amountDue: +r.amount_due || 0, paid: +r.amount_paid || 0, lateFee: +r.late_fee || 0, paidOn: r.paid_on, method: r.method || '', reference: r.reference || '', status: r.status, notes: r.notes || '' })
@@ -915,6 +915,8 @@ export function periodItems(period) {
     const due = dueOn(ob, period), pay = payments().find(x => x.oblId === ob.id && x.period === period) || null
     let status = pay ? pay.status : today() > addDays(due, ob.grace || 0) ? 'late' : today() >= due ? 'due' : 'upcoming'
     if (!pay && ob.autopay && today() >= due && ob.dir === 'out') status = 'autopay'
+    // Stripe autopay (tenant saved their card or bank): shown as automatic until the charge clears, unless it failed.
+    if (!pay && ob.stripeAutopay && ob.dir === 'in' && status !== 'late' && !String(ob.stripeLastError || '').startsWith(period)) status = 'autopay'
     out.push({ ob, inv: ob.invId ? db.inventory.find(v => v.id === ob.invId) || null : null, period, due, amount: ob.amount, pay, status })
   }
   return out.sort((a, b) => a.due.localeCompare(b.due))
@@ -997,6 +999,31 @@ export async function quickCharge({ concept, party, amount, invId }) {
   if (error) throw new Error(/column|schema cache/i.test(error.message) ? t('pay.e_sql') : t('team.e_error') + ' (' + error.message + ')')
   await loadFinance()
   return `${location.origin}/pay/?t=${tok}`
+}
+// Turn off a tenant's automatic Stripe payment (the saved card or bank stays in Stripe but is no longer charged).
+export async function stopAutopay(ob) {
+  if (sb && isUuid(ob.id)) {
+    const { error } = await sb.from('obligations').update({ stripe_autopay: false }).eq('id', ob.id)
+    if (error) throw new Error(/column|schema cache/i.test(error.message) ? t('pay.e_sql2') : t('team.e_error'))
+    await loadFinance()
+  } else { const o = obligations().find(x => x.id === ob.id); if (o) o.stripeAutopay = false; persist(); emit() }
+}
+// Website payment (amount + reference) applied by Finance to a pending item: the money moves to that item's month
+// (adds to what was paid) and the website entry is closed, so it is not counted twice.
+export const isWebPayment = ob => /^Web payment:/.test(ob?.label || '')
+export async function applyWebPayment(src, target) {
+  const amt = +src.pay?.paid || 0
+  if (!(amt > 0)) return
+  const prevPaid = +target.pay?.paid || 0, total = Math.round((prevPaid + amt) * 100) / 100
+  const note = [target.pay?.notes, `Website payment $${amt.toFixed(2)} (${src.ob.label.replace(/^Web payment:\s*/, '')}${src.ob.party ? ', ' + src.ob.party : ''}) applied ${today()}`].filter(Boolean).join(' · ')
+  await recordPayment(target, { paid: total, paidOn: src.pay.paidOn || today(), method: src.pay.method || 'Stripe', reference: [target.pay?.reference, src.pay.reference].filter(Boolean).join(', ').slice(0, 200), notes: note.slice(0, 500), status: total + 0.01 >= target.amount ? 'paid' : 'partial' })
+  if (sb && isUuid(src.ob.id)) {
+    await sb.from('payments').delete().eq('obligation_id', src.ob.id)
+    await sb.from('obligations').update({ active: false, notes: [src.ob.notes, `Applied to ${target.inv?.address || ''} ${target.period.slice(0, 7)}`].filter(Boolean).join(' · ').slice(0, 500) }).eq('id', src.ob.id)
+    await loadFinance()
+  } else {
+    const f = demoFin(); f.payments = f.payments.filter(x => x.oblId !== src.ob.id); const o = f.obligations.find(x => x.id === src.ob.id); if (o) o.active = false; persist(); emit()
+  }
 }
 export async function undoPayment(it) {
   if (!it.pay) return

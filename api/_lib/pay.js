@@ -6,7 +6,7 @@ import { sb } from './outreach.js'
 export const stripeReady = () => !!process.env.STRIPE_SECRET_KEY
 
 // Stripe API call (form encoded, nested keys like line_items[0][price_data][currency]).
-export async function stripe(path, params = {}, method = 'POST') {
+export async function stripe(path, params = {}, method = 'POST', idem = null) {
   const form = new URLSearchParams()
   const add = (k, v) => {
     if (v === undefined || v === null) return
@@ -16,7 +16,7 @@ export async function stripe(path, params = {}, method = 'POST') {
   }
   Object.entries(params).forEach(([k, v]) => add(k, v))
   const r = await fetch(`https://api.stripe.com/v1/${path}${method === 'GET' && [...form].length ? '?' + form : ''}`, {
-    method, headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, ...(method === 'GET' ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' }) }, body: method === 'GET' ? undefined : form,
+    method, headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, ...(method === 'GET' ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' }), ...(idem ? { 'Idempotency-Key': idem } : {}) }, body: method === 'GET' ? undefined : form,
   })
   const j = await r.json().catch(() => ({}))
   if (!r.ok) throw new Error(j?.error?.message || `stripe ${r.status}`)
@@ -36,7 +36,7 @@ export function stripeSigOk(raw, header, secret = process.env.STRIPE_WEBHOOK_SEC
 
 // Payment options the team sets in the portal (Settings, Online payments). Saved in settings key "payments".
 export const PAY_DEFAULTS = { web_on: true, web_min: 1, web_max: 10000, card: true, bank: true, partial: true,
-  ref_en: 'Reference (property address, invoice or account number)', ref_es: 'Referencia (dirección de la casa, factura o número de cuenta)', web_note_en: '', web_note_es: '' }
+  autopay: true, ref_en: 'Reference (property address, invoice or account number)', ref_es: 'Referencia (dirección de la casa, factura o número de cuenta)', web_note_en: '', web_note_es: '' }
 export async function payConfig(db, orgId) {
   const v = orgId ? (await (await db.rest(`settings?org_id=eq.${orgId}&key=eq.payments&select=value`)).json().catch(() => []))?.[0]?.value : null
   const c = { ...PAY_DEFAULTS, ...(v && typeof v === 'object' ? v : {}) }
@@ -71,6 +71,8 @@ function dueOn(ob, period) {
   const day = Math.min(ob.frequency === 'monthly' && ob.due_day ? ob.due_day : ob.due_date ? +ob.due_date.slice(8, 10) : (ob.due_day || 1), last)
   return `${period.slice(0, 8)}${pad(day)}`
 }
+
+export { applies, dueOn, addMonths, monthOf }
 
 // What this pay link is for right now: this month if it is not fully paid, otherwise the next one that is due.
 // Older months are not asked here (they may have been paid outside the portal); the team handles those.

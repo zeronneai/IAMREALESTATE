@@ -11,6 +11,16 @@ export default async function handler(req, res) {
   let b = req.body || {}; if (typeof b === 'string') { try { b = JSON.parse(b) } catch { b = {} } }
   const x = await payTarget(b.t)
   if (!x) return res.status(404).json({ error: 'not_found' })
+  const host0 = req.headers['x-forwarded-host'] || req.headers.host
+  const auto = !!b.autopay && x.ob.frequency !== 'once' && x.cfg.autopay !== false
+  // Nothing due right now but they want autopay: save their card or bank only (setup), charged on the next due date.
+  if ((!x.period || !(x.amount > 0)) && auto) {
+    try {
+      const s = await stripe('checkout/sessions', { mode: 'setup', ui_mode: 'embedded_page', currency: 'usd', customer_creation: 'always', allowed_payment_method_types: methodsOf(x.cfg),
+        return_url: `https://${host0}/pay/?t=${encodeURIComponent(b.t)}&ok=2&session_id={CHECKOUT_SESSION_ID}`, metadata: { obligation_id: x.ob.id, org_id: x.ob.org_id, autopay: '1' } })
+      return res.status(200).json({ client_secret: s.client_secret, amount: 0, setup: true })
+    } catch (e) { return res.status(502).json({ error: 'stripe_error', detail: String(e.message || '').slice(0, 300) }) }
+  }
   if (!x.period || !(x.amount > 0)) return res.status(409).json({ error: 'nothing_due' })
   // A different amount (partial payment) only on recurring links, between $1 and what is owed.
   let amount = x.amount
@@ -32,8 +42,10 @@ export default async function handler(req, res) {
       line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: Math.round(amount * 100), product_data: { name: what.slice(0, 250) } } }],
       // Embedded: the Stripe payment form shows inside our own pay page (logo, colors), not on a Stripe page.
       ui_mode: 'embedded_page', return_url: back + '&ok=1&session_id={CHECKOUT_SESSION_ID}',
-      metadata: { obligation_id: x.ob.id, period: x.period, org_id: x.ob.org_id, due: x.due },
-      payment_intent_data: { metadata: { obligation_id: x.ob.id, period: x.period, org_id: x.ob.org_id }, description: what.slice(0, 250) },
+      metadata: { obligation_id: x.ob.id, period: x.period, org_id: x.ob.org_id, due: x.due, autopay: auto ? '1' : '' },
+      // Autopay: Stripe keeps the card or bank account for the next months (charged by api/cron/autopay.js).
+      ...(auto ? { customer_creation: 'always' } : {}),
+      payment_intent_data: { metadata: { obligation_id: x.ob.id, period: x.period, org_id: x.ob.org_id }, description: what.slice(0, 250), ...(auto ? { setup_future_usage: 'off_session' } : {}) },
       ...(b.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(b.email) ? { customer_email: String(b.email).slice(0, 120) } : {}),
     })
     res.status(200).json({ client_secret: s.client_secret, amount })

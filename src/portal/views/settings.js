@@ -29,7 +29,7 @@ const initials = s => String(s || '?').trim().split(/[\s@.]+/).filter(Boolean).s
 const suggestPw = () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(12)); for (const n of r) s += a[n % a.length]; return s }
 
 // Defaults for the payment options (same as the server, api/_lib/pay.js).
-const PAY_DEF = { web_on: true, web_min: 1, web_max: 10000, card: true, bank: true, partial: true, ref_en: 'Reference (property address, invoice or account number)', ref_es: 'Referencia (dirección de la casa, factura o número de cuenta)', web_note_en: '', web_note_es: '' }
+const PAY_DEF = { autopay: true, web_on: true, web_min: 1, web_max: 10000, card: true, bank: true, partial: true, ref_en: 'Reference (property address, invoice or account number)', ref_es: 'Referencia (dirección de la casa, factura o número de cuenta)', web_note_en: '', web_note_es: '' }
 
 export async function settingsView(el) {
   const adv = S.advanced()
@@ -85,6 +85,7 @@ export async function settingsView(el) {
           <label class="chk"><input type="checkbox" name="card" ${c.card ? 'checked' : ''}> ${esc(t('pay.o_card'))}</label>
           <label class="chk"><input type="checkbox" name="bank" ${c.bank ? 'checked' : ''}> ${esc(t('pay.o_bank'))}</label>
           <label class="chk"><input type="checkbox" name="partial" ${c.partial ? 'checked' : ''}> ${esc(t('pay.o_partial'))}</label>
+          <label class="chk"><input type="checkbox" name="autopay" ${c.autopay !== false ? 'checked' : ''}> ${esc(t('pay.o_auto'))}</label>
           <label class="chk"><input type="checkbox" name="web_on" ${c.web_on ? 'checked' : ''}> ${esc(t('pay.o_web'))} <a href="/pay/" target="_blank" rel="noopener">/pay/</a></label>
           <div class="ib-row"><div class="f" style="flex:1"><label>${esc(t('pay.o_min'))}</label><input name="web_min" type="number" min="1" step="1" value="${esc(c.web_min)}"></div><div class="f" style="flex:1"><label>${esc(t('pay.o_max'))}</label><input name="web_max" type="number" min="1" step="1" value="${esc(c.web_max)}"></div></div>
           <div class="f"><label>${esc(t('pay.o_ref'))} (EN)</label><input name="ref_en" maxlength="120" value="${esc(c.ref_en)}"></div>
@@ -156,7 +157,7 @@ export async function settingsView(el) {
   })
   el.querySelector('[data-payopt]')?.addEventListener('submit', async e => {
     e.preventDefault(); const f = e.target, fd = new FormData(f)
-    const v = { card: fd.get('card') === 'on', bank: fd.get('bank') === 'on', partial: fd.get('partial') === 'on', web_on: fd.get('web_on') === 'on', web_min: Math.max(1, +fd.get('web_min') || 1), web_max: Math.max(1, +fd.get('web_max') || 10000), ref_en: String(fd.get('ref_en')).trim() || PAY_DEF.ref_en, ref_es: String(fd.get('ref_es')).trim() || PAY_DEF.ref_es, web_note_en: String(fd.get('web_note_en')).trim(), web_note_es: String(fd.get('web_note_es')).trim() }
+    const v = { autopay: fd.get('autopay') === 'on', card: fd.get('card') === 'on', bank: fd.get('bank') === 'on', partial: fd.get('partial') === 'on', web_on: fd.get('web_on') === 'on', web_min: Math.max(1, +fd.get('web_min') || 1), web_max: Math.max(1, +fd.get('web_max') || 10000), ref_en: String(fd.get('ref_en')).trim() || PAY_DEF.ref_en, ref_es: String(fd.get('ref_es')).trim() || PAY_DEF.ref_es, web_note_en: String(fd.get('web_note_en')).trim(), web_note_es: String(fd.get('web_note_es')).trim() }
     if (!v.card && !v.bank) v.card = true
     if (v.web_max < v.web_min) v.web_max = v.web_min
     try { await S.saveSettings({ payments: v }); toast(t('pay.o_saved')) } catch (err) { toast(err.message) }
